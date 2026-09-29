@@ -4,7 +4,6 @@ from pathlib import Path
 
 import trimesh
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from pydantic import BaseModel, Field
 
 from app.services.pricing import calculate_pricing
 from app.services.slicer import slice_stl
@@ -30,21 +29,6 @@ MATERIALS = {
         "cost_per_kg": 25.00,
     },
 }
-
-
-class QuoteRequest(BaseModel):
-    volume_mm3: float = Field(gt=0)
-    surface_area_mm2: float = Field(gt=0)
-
-    material: str = "PLA"
-    quantity: int = Field(default=1, ge=1)
-
-    infill_percent: float = Field(default=20, ge=0, le=100)
-
-    nozzle_diameter_mm: float = Field(default=0.4, gt=0)
-    wall_count: int = Field(default=3, ge=1)
-
-    waste_percent: float = Field(default=5, ge=0, le=100)
 
 
 @app.get("/")
@@ -184,132 +168,11 @@ async def slice_model(file: UploadFile = File(...)):
     }
 
 
-@app.post("/quote")
-def calculate_quote(request: QuoteRequest):
-    material_name = request.material.upper()
-
-    if material_name not in MATERIALS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported material: {request.material}",
-        )
-
-    material = MATERIALS[material_name]
-
-    density = material["density_g_cm3"]
-    cost_per_kg = material["cost_per_kg"]
-
-    wall_thickness_mm = (
-        request.nozzle_diameter_mm
-        * request.wall_count
-    )
-
-    shell_volume_mm3 = (
-        request.surface_area_mm2
-        * wall_thickness_mm
-    )
-
-    shell_volume_mm3 = min(
-        shell_volume_mm3,
-        request.volume_mm3,
-    )
-
-    internal_volume_mm3 = max(
-        request.volume_mm3
-        - shell_volume_mm3,
-        0,
-    )
-
-    infill_ratio = (
-        request.infill_percent / 100
-    )
-
-    infill_volume_mm3 = (
-        internal_volume_mm3
-        * infill_ratio
-    )
-
-    estimated_material_volume_mm3 = (
-        shell_volume_mm3
-        + infill_volume_mm3
-    )
-
-    material_volume_cm3 = (
-        estimated_material_volume_mm3
-        / 1000
-    )
-
-    material_weight_g = (
-        material_volume_cm3
-        * density
-    )
-
-    waste_multiplier = (
-        1
-        + request.waste_percent / 100
-    )
-
-    material_weight_with_waste_g = (
-        material_weight_g
-        * waste_multiplier
-    )
-
-    total_weight_g = (
-        material_weight_with_waste_g
-        * request.quantity
-    )
-
-    material_cost = (
-        total_weight_g / 1000
-    ) * cost_per_kg
-
-    return {
-        "material": material_name,
-        "quantity": request.quantity,
-        "print_parameters": {
-            "infill_percent": request.infill_percent,
-            "nozzle_diameter_mm": request.nozzle_diameter_mm,
-            "wall_count": request.wall_count,
-            "wall_thickness_mm": round(
-                wall_thickness_mm,
-                3,
-            ),
-            "waste_percent": request.waste_percent,
-        },
-        "estimate": {
-            "shell_volume_mm3": round(
-                shell_volume_mm3,
-                3,
-            ),
-            "infill_volume_mm3": round(
-                infill_volume_mm3,
-                3,
-            ),
-            "material_volume_mm3": round(
-                estimated_material_volume_mm3,
-                3,
-            ),
-            "material_weight_g_each": round(
-                material_weight_with_waste_g,
-                2,
-            ),
-            "total_weight_g": round(
-                total_weight_g,
-                2,
-            ),
-            "material_cost_eur": round(
-                material_cost,
-                2,
-            ),
-        },
-        "status": "estimated",
-    }
-
-
 @app.post("/estimate")
 async def estimate_model(
     file: UploadFile = File(...),
     quantity: int = 1,
+    material: str = "PLA",
 ):
     filename = file.filename or ""
 
@@ -319,10 +182,15 @@ async def estimate_model(
             detail="Only STL files are supported at this stage.",
         )
 
-    if quantity < 1:
+    material = material.upper()
+
+    if material not in {"PLA", "PETG"}:
         raise HTTPException(
             status_code=400,
-            detail="Quantity must be at least 1.",
+            detail=(
+                "Unsupported material. "
+                "Available materials: PLA, PETG."
+            ),
         )
 
     contents = await file.read()
@@ -432,7 +300,8 @@ async def estimate_model(
             )
 
             slicing = slice_stl(
-                stl_path
+                stl_path,
+                material=material,
             )
 
     except Exception as exc:
@@ -469,11 +338,10 @@ async def estimate_model(
     return {
         "filename": filename,
         "quantity": quantity,
+        "material": material,
         "status": "estimated",
 
         "geometry": geometry,
-
         "slicing": slicing,
-
         "pricing": pricing,
     }

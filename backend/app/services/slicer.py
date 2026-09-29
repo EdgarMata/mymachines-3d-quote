@@ -20,10 +20,16 @@ ORCA_PRINTER_PROFILE = (
     / "Prusa MK3S 0.4 nozzle.json"
 )
 
-ORCA_FILAMENT_PROFILE = (
-    PROJECT_ROOT
-    / "profiles/filaments/mymachines_pla.json"
-)
+FILAMENT_PROFILES = {
+    "PLA": (
+        PROJECT_ROOT
+        / "profiles/filaments/mymachines_pla.json"
+    ),
+    "PETG": (
+        PROJECT_ROOT
+        / "profiles/filaments/mymachines_petg.json"
+    ),
+}
 
 
 def parse_print_time(value: str) -> int:
@@ -131,8 +137,21 @@ def extract_gcode_stats(gcode_path: Path) -> dict:
     return result
 
 
-def slice_stl(stl_path: Path) -> dict:
+def slice_stl(
+    stl_path: Path,
+    material: str = "PLA",
+) -> dict:
     stl_path = Path(stl_path).resolve()
+    material = material.upper()
+
+    if material not in FILAMENT_PROFILES:
+        raise ValueError(
+            f"Unsupported material: {material}"
+        )
+
+    filament_profile = (
+        FILAMENT_PROFILES[material]
+    )
 
     if not stl_path.exists():
         raise FileNotFoundError(
@@ -159,7 +178,7 @@ def slice_stl(stl_path: Path) -> dict:
             ),
 
             "--load-filaments",
-            str(ORCA_FILAMENT_PROFILE),
+            str(filament_profile),
 
             "--slice",
             "0",
@@ -210,9 +229,10 @@ def slice_stl(stl_path: Path) -> dict:
             ),
             "process_profile": (
                 ORCA_PROCESS_PROFILE.name
-            ),
+             ),
             "filament_profile": (
-                ORCA_FILAMENT_PROFILE.name
+                filament_profile.name
             ),
+            "material": material,
             **stats,
         }

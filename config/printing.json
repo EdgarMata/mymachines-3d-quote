@@ -1,0 +1,55 @@
+{
+  "default_machine": "prusa_mk3s_04",
+  "default_material": "PLA",
+  "default_quality": "standard",
+
+  "materials": {
+    "PLA": {
+      "label": "PLA",
+      "filament_profile": "mymachines_pla.json",
+      "qualities": [
+        "draft",
+        "standard",
+        "fine"
+      ]
+    },
+
+    "PETG": {
+      "label": "PETG",
+      "filament_profile": "mymachines_petg.json",
+      "qualities": [
+        "draft",
+        "standard",
+        "fine"
+      ]
+    }
+  },
+
+  "qualities": {
+    "draft": {
+      "label": "Draft",
+      "layer_height_mm": 0.30,
+      "process_profile": "draft.json"
+    },
+
+    "standard": {
+      "label": "Standard",
+      "layer_height_mm": 0.20,
+      "process_profile": "standard.json"
+    },
+
+    "fine": {
+      "label": "Fine",
+      "layer_height_mm": 0.12,
+      "process_profile": "fine.json"
+    }
+  },
+
+  "machines": {
+    "prusa_mk3s_04": {
+      "label": "Prusa MK3S - 0.4 mm",
+      "nozzle_diameter_mm": 0.4,
+      "machine_profile": "prusa_mk3s_04.json"
+    }
+  }
+}
