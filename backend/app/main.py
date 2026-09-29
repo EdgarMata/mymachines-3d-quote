@@ -1,20 +1,24 @@
 import io
+import tempfile
+from pathlib import Path
 
 import trimesh
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
+from app.services.slicer import slice_stl
+
 
 app = FastAPI(
     title="MyMachines 3D Quote API",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 
 MATERIALS = {
     "PLA": {
         "density_g_cm3": 1.24,
-        "cost_per_kg": 20.00,
+        "cost_per_kg": 16.00,
     },
     "PETG": {
         "density_g_cm3": 1.27,
@@ -47,7 +51,7 @@ def root():
     return {
         "name": "MyMachines 3D Quote API",
         "status": "ok",
-        "version": "0.1.0",
+        "version": "0.2.0",
     }
 
 
@@ -119,6 +123,64 @@ async def upload_model(file: UploadFile = File(...)):
         "status": "analysed",
     }
 
+
+@app.post("/slice")
+async def slice_model(file: UploadFile = File(...)):
+    filename = file.filename or ""
+
+    if not filename.lower().endswith(".stl"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only STL files are supported at this stage.",
+        )
+
+    contents = await file.read()
+
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded file is empty.",
+        )
+
+    try:
+        project_root = (
+            Path.home()
+            / "Projetos"
+            / "mymachines-3d-quote"
+        )
+
+        temp_root = (
+            project_root
+            / "tmp"
+            / "uploads"
+        )
+
+        temp_root.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        with tempfile.TemporaryDirectory(
+            dir=temp_root
+        ) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+
+            stl_path = tmp_path / filename
+            stl_path.write_bytes(contents)
+
+            result = slice_stl(stl_path)
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Slicing failed: {exc}",
+        )
+
+    return {
+        "filename": filename,
+        "status": "sliced",
+        "slicing": result,
+    }
 
 @app.post("/quote")
 def calculate_quote(request: QuoteRequest):
