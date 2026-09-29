@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "./App.css";
+import ModelViewer from "./components/ModelViewer";
 
 type MaterialOption = {
   label: string;
@@ -82,6 +83,15 @@ function App() {
 
   const [file, setFile] =
     useState<File | null>(null);
+
+  const [
+    orientation,
+    setOrientation,
+  ] = useState({
+    x: 0,
+    y: 0,
+    z: 0,
+  });
 
   const [material, setMaterial] =
     useState("");
@@ -313,11 +323,39 @@ function App() {
                   ?? null;
 
                 setFile(selectedFile);
-                setEstimate(null);
-                setError(null);
+
+                setOrientation({
+                  x: 0,
+                  y: 0,
+                  z: 0,
+                });
+
+setEstimate(null);
+setError(null);
               }}
             />
           </div>
+
+          {file && (
+            <div className="viewer-section">
+              <div className="viewer-heading">
+                <h3>3D Preview</h3>
+
+                <p>
+                  Drag to inspect the model.
+                  Scroll to zoom.
+                </p>
+              </div>
+
+              <ModelViewer
+                file={file}
+                orientation={orientation}
+                onOrientationChange={
+                  setOrientation
+                }
+              />
+            </div>
+          )}
 
           <div className="form-grid">
             <div className="form-group">

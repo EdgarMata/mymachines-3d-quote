@@ -359,3 +359,160 @@ input[type="number"]:focus {
     text-align: left;
   }
 }
+
+.viewer-section {
+  margin-top: 28px;
+}
+
+.viewer-heading {
+  margin-bottom: 12px;
+}
+
+.viewer-heading h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.viewer-heading p {
+  margin: 0;
+  color: var(--mm-muted);
+  font-size: 14px;
+}
+
+.model-viewer {
+  width: 100%;
+  height: 440px;
+  overflow: hidden;
+  border: 1px solid #e3e5e8;
+  border-radius: 18px;
+  background: #f7f8fa;
+}
+
+@media (max-width: 760px) {
+  .model-viewer {
+    height: 320px;
+  }
+}
+
+.model-viewer-wrapper {
+  width: 100%;
+}
+
+.orientation-panel {
+  margin-top: 14px;
+  padding: 20px;
+  border: 1px solid #e3e5e8;
+  border-radius: 16px;
+  background: #f7f8fa;
+}
+
+.orientation-info {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.orientation-info strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.orientation-info p {
+  max-width: 540px;
+  margin: 5px 0 0;
+  color: var(--mm-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.orientation-values {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.orientation-values span {
+  min-width: 58px;
+  padding: 7px 10px;
+  border-radius: 20px;
+  background: white;
+  border: 1px solid #e0e2e4;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.orientation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.orientation-actions button {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid #d7dadd;
+  border-radius: 22px;
+  background: white;
+  color: var(--mm-text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    color 0.2s;
+}
+
+.orientation-actions button:hover {
+  border-color: var(--mm-blue);
+  color: var(--mm-blue-dark);
+}
+
+.orientation-actions
+.orientation-reset {
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .orientation-info {
+    flex-direction: column;
+  }
+
+  .orientation-actions {
+    flex-direction: column;
+  }
+
+  .orientation-actions button {
+    width: 100%;
+  }
+
+  .orientation-actions
+  .orientation-reset {
+    margin-left: 0;
+  }
+}
+
+.place-face-button {
+  border-color: var(--mm-blue) !important;
+  color: var(--mm-blue-dark) !important;
+}
+
+.place-face-button.active {
+  background: var(--mm-blue) !important;
+  border-color: var(--mm-blue) !important;
+  color: white !important;
+}
+
+.face-selection-message {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #eff9ff;
+  color: #277baa;
+  font-size: 13px;
+  font-weight: 500;
+}
