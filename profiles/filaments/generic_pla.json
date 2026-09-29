@@ -1,0 +1,13 @@
+{
+    "compatible_printers": [
+        "Prusa MK3S 0.4 nozzle"
+    ],
+    "filament_settings_id": [
+        "My Generic PLA"
+    ],
+    "from": "User",
+    "inherits": "Generic PLA @System",
+    "is_custom_defined": "0",
+    "name": "My Generic PLA",
+    "version": "2.3.1.0"
+}

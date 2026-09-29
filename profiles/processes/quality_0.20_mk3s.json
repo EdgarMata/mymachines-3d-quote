@@ -1,0 +1,8 @@
+{
+    "from": "User",
+    "inherits": "0.20mm Quality @MK3S",
+    "is_custom_defined": "0",
+    "name": "My 0.20mm Quality @MK3S",
+    "print_settings_id": "My 0.20mm Quality @MK3S",
+    "version": "2.3.1.0"
+}
