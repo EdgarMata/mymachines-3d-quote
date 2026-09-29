@@ -6,12 +6,13 @@ import trimesh
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
+from app.services.pricing import calculate_pricing
 from app.services.slicer import slice_stl
 
 
 app = FastAPI(
     title="MyMachines 3D Quote API",
-    version="0.2.0",
+    version="0.3.0",
 )
 
 
@@ -51,7 +52,7 @@ def root():
     return {
         "name": "MyMachines 3D Quote API",
         "status": "ok",
-        "version": "0.2.0",
+        "version": "0.3.0",
     }
 
 
@@ -182,6 +183,7 @@ async def slice_model(file: UploadFile = File(...)):
         "slicing": result,
     }
 
+
 @app.post("/quote")
 def calculate_quote(request: QuoteRequest):
     material_name = request.material.upper()
@@ -198,11 +200,13 @@ def calculate_quote(request: QuoteRequest):
     cost_per_kg = material["cost_per_kg"]
 
     wall_thickness_mm = (
-        request.nozzle_diameter_mm * request.wall_count
+        request.nozzle_diameter_mm
+        * request.wall_count
     )
 
     shell_volume_mm3 = (
-        request.surface_area_mm2 * wall_thickness_mm
+        request.surface_area_mm2
+        * wall_thickness_mm
     )
 
     shell_volume_mm3 = min(
@@ -211,34 +215,43 @@ def calculate_quote(request: QuoteRequest):
     )
 
     internal_volume_mm3 = max(
-        request.volume_mm3 - shell_volume_mm3,
+        request.volume_mm3
+        - shell_volume_mm3,
         0,
     )
 
-    infill_ratio = request.infill_percent / 100
+    infill_ratio = (
+        request.infill_percent / 100
+    )
 
     infill_volume_mm3 = (
-        internal_volume_mm3 * infill_ratio
+        internal_volume_mm3
+        * infill_ratio
     )
 
     estimated_material_volume_mm3 = (
-        shell_volume_mm3 + infill_volume_mm3
+        shell_volume_mm3
+        + infill_volume_mm3
     )
 
     material_volume_cm3 = (
-        estimated_material_volume_mm3 / 1000
+        estimated_material_volume_mm3
+        / 1000
     )
 
     material_weight_g = (
-        material_volume_cm3 * density
+        material_volume_cm3
+        * density
     )
 
     waste_multiplier = (
-        1 + request.waste_percent / 100
+        1
+        + request.waste_percent / 100
     )
 
     material_weight_with_waste_g = (
-        material_weight_g * waste_multiplier
+        material_weight_g
+        * waste_multiplier
     )
 
     total_weight_g = (
@@ -290,4 +303,177 @@ def calculate_quote(request: QuoteRequest):
             ),
         },
         "status": "estimated",
+    }
+
+
+@app.post("/estimate")
+async def estimate_model(
+    file: UploadFile = File(...),
+    quantity: int = 1,
+):
+    filename = file.filename or ""
+
+    if not filename.lower().endswith(".stl"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only STL files are supported at this stage.",
+        )
+
+    if quantity < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Quantity must be at least 1.",
+        )
+
+    contents = await file.read()
+
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded file is empty.",
+        )
+
+    # ---------------------------------------------
+    # Geometry analysis
+    # ---------------------------------------------
+
+    try:
+        mesh = trimesh.load(
+            io.BytesIO(contents),
+            file_type="stl",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unable to read STL file: {exc}",
+        )
+
+    if isinstance(mesh, trimesh.Scene):
+        if not mesh.geometry:
+            raise HTTPException(
+                status_code=400,
+                detail="The STL contains no geometry.",
+            )
+
+        mesh = trimesh.util.concatenate(
+            tuple(mesh.geometry.values())
+        )
+
+    dimensions = mesh.extents
+
+    geometry = {
+        "dimensions_mm": {
+            "x": round(
+                float(dimensions[0]),
+                3,
+            ),
+            "y": round(
+                float(dimensions[1]),
+                3,
+            ),
+            "z": round(
+                float(dimensions[2]),
+                3,
+            ),
+        },
+        "volume_mm3": round(
+            float(abs(mesh.volume)),
+            3,
+        ),
+        "surface_area_mm2": round(
+            float(mesh.area),
+            3,
+        ),
+        "vertices": int(
+            len(mesh.vertices)
+        ),
+        "faces": int(
+            len(mesh.faces)
+        ),
+        "watertight": bool(
+            mesh.is_watertight
+        ),
+    }
+
+    # ---------------------------------------------
+    # Slicing
+    # ---------------------------------------------
+
+    try:
+        project_root = (
+            Path.home()
+            / "Projetos"
+            / "mymachines-3d-quote"
+        )
+
+        temp_root = (
+            project_root
+            / "tmp"
+            / "uploads"
+        )
+
+        temp_root.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        with tempfile.TemporaryDirectory(
+            dir=temp_root
+        ) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+
+            stl_path = (
+                tmp_path
+                / filename
+            )
+
+            stl_path.write_bytes(
+                contents
+            )
+
+            slicing = slice_stl(
+                stl_path
+            )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Slicing failed: {exc}",
+        )
+
+    # ---------------------------------------------
+    # Pricing
+    # ---------------------------------------------
+
+    try:
+        pricing = calculate_pricing(
+            filament_cost_eur=(
+                slicing["material_cost_eur"]
+            ),
+            print_time_seconds=(
+                slicing["print_time_seconds"]
+            ),
+            quantity=quantity,
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Pricing failed: {exc}",
+        )
+
+    # ---------------------------------------------
+    # Final result
+    # ---------------------------------------------
+
+    return {
+        "filename": filename,
+        "quantity": quantity,
+        "status": "estimated",
+
+        "geometry": geometry,
+
+        "slicing": slicing,
+
+        "pricing": pricing,
     }
