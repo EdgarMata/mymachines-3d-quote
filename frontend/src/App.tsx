@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./App.css";
 
 type MaterialOption = {
   label: string;
@@ -32,6 +33,14 @@ type EstimateResponse = {
   material: string;
   quality: string;
   status: string;
+
+  geometry: {
+    dimensions_mm: {
+      x: number;
+      y: number;
+      z: number;
+    };
+  };
 
   slicing: {
     filament_g: number;
@@ -196,24 +205,25 @@ function App() {
 
   if (loadingOptions) {
     return (
-      <main>
-        <h1>MyMachines 3D Quote</h1>
-        <p>Loading printing options...</p>
-      </main>
+      <div className="page">
+        <div className="status-card">
+          Loading printing options...
+        </div>
+      </div>
     );
   }
 
   if (!options) {
     return (
-      <main>
-        <h1>MyMachines 3D Quote</h1>
+      <div className="page">
+        <div className="status-card">
+          <h2>Unable to load printing options</h2>
 
-        <p>
-          Unable to load printing options.
-        </p>
-
-        {error && <pre>{error}</pre>}
-      </main>
+          {error && (
+            <p>{error}</p>
+          )}
+        </div>
+      </div>
     );
   }
 
@@ -223,276 +233,398 @@ function App() {
     ]?.qualities ?? [];
 
   return (
-    <main>
-      <h1>MyMachines 3D Quote</h1>
+    <div className="page">
+      <section className="hero">
+        <span className="eyebrow">
+          MYMACHINES
+        </span>
 
-      <p>
-        Upload your 3D model and choose
-        your printing options.
-      </p>
+        <h1>
+          Instant 3D Printing Quote
+        </h1>
 
-      <section>
-        <div>
-          <label htmlFor="file">
-            STL file
-          </label>
-
-          <br />
-
-          <input
-            id="file"
-            type="file"
-            accept=".stl"
-            onChange={(event) => {
-              const selectedFile =
-                event.target.files?.[0]
-                ?? null;
-
-              setFile(selectedFile);
-              setEstimate(null);
-            }}
-          />
-        </div>
-
-        <br />
-
-        <div>
-          <label htmlFor="material">
-            Material
-          </label>
-
-          <br />
-
-          <select
-            id="material"
-            value={material}
-            onChange={(event) => {
-              const newMaterial =
-                event.target.value;
-
-              setMaterial(newMaterial);
-              setEstimate(null);
-
-              const qualities =
-                options.materials[
-                  newMaterial
-                ].qualities;
-
-              if (
-                !qualities.includes(
-                  quality
-                )
-              ) {
-                setQuality(
-                  qualities[0]
-                );
-              }
-            }}
-          >
-            {Object.entries(
-              options.materials
-            ).map(
-              ([
-                materialName,
-                materialData,
-              ]) => (
-                <option
-                  key={materialName}
-                  value={materialName}
-                >
-                  {materialData.label}
-                </option>
-              )
-            )}
-          </select>
-        </div>
-
-        <br />
-
-        <div>
-          <label htmlFor="quality">
-            Print quality
-          </label>
-
-          <br />
-
-          <select
-            id="quality"
-            value={quality}
-            onChange={(event) => {
-              setQuality(
-                event.target.value
-              );
-              setEstimate(null);
-            }}
-          >
-            {availableQualities.map(
-              (qualityName) => {
-                const qualityData =
-                  options.qualities[
-                    qualityName
-                  ];
-
-                return (
-                  <option
-                    key={qualityName}
-                    value={qualityName}
-                  >
-                    {qualityData.label} -{" "}
-                    {
-                      qualityData.layer_height_mm
-                    }{" "}
-                    mm
-                  </option>
-                );
-              }
-            )}
-          </select>
-        </div>
-
-        <br />
-
-        <div>
-          <label htmlFor="quantity">
-            Quantity
-          </label>
-
-          <br />
-
-          <input
-            id="quantity"
-            type="number"
-            min="1"
-            value={quantity}
-            onChange={(event) => {
-              setQuantity(
-                Math.max(
-                  1,
-                  Number(
-                    event.target.value
-                  )
-                )
-              );
-
-              setEstimate(null);
-            }}
-          />
-        </div>
-
-        <br />
-
-        <button
-          type="button"
-          onClick={calculateQuote}
-          disabled={
-            calculating || !file
-          }
-        >
-          {calculating
-            ? "Calculating..."
-            : "Calculate quote"}
-        </button>
+        <p>
+          Upload your STL file and get an
+          instant production estimate.
+        </p>
       </section>
 
-      {error && (
-        <>
-          <hr />
-
-          <section>
-            <h2>Error</h2>
-            <p>{error}</p>
-          </section>
-        </>
-      )}
-
-      {estimate && (
-        <>
-          <hr />
-
-          <section>
-            <h2>Quote estimate</h2>
+      <main className="quote-container">
+        <section className="quote-card">
+          <div className="section-heading">
+            <h2>
+              Configure your print
+            </h2>
 
             <p>
-              File: {estimate.filename}
+              Choose your file, material,
+              quality and quantity.
             </p>
+          </div>
 
-            <p>
-              Material:{" "}
-              {estimate.material}
+          <div className="form-group">
+            <label htmlFor="file">
+              3D model
+            </label>
+
+            <label
+              className={`file-drop ${
+                file ? "has-file" : ""
+              }`}
+              htmlFor="file"
+            >
+              <span className="file-icon">
+                +
+              </span>
+
+              {file ? (
+                <>
+                  <strong>
+                    {file.name}
+                  </strong>
+
+                  <span>
+                    Click to choose another
+                    STL file
+                  </span>
+                </>
+              ) : (
+                <>
+                  <strong>
+                    Choose an STL file
+                  </strong>
+
+                  <span>
+                    Upload your model to
+                    calculate a quote
+                  </span>
+                </>
+              )}
+            </label>
+
+            <input
+              className="file-input"
+              id="file"
+              type="file"
+              accept=".stl"
+              onChange={(event) => {
+                const selectedFile =
+                  event.target.files?.[0]
+                  ?? null;
+
+                setFile(selectedFile);
+                setEstimate(null);
+                setError(null);
+              }}
+            />
+          </div>
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="material">
+                Material
+              </label>
+
+              <select
+                id="material"
+                value={material}
+                onChange={(event) => {
+                  const newMaterial =
+                    event.target.value;
+
+                  setMaterial(
+                    newMaterial
+                  );
+
+                  setEstimate(null);
+
+                  const qualities =
+                    options.materials[
+                      newMaterial
+                    ].qualities;
+
+                  if (
+                    !qualities.includes(
+                      quality
+                    )
+                  ) {
+                    setQuality(
+                      qualities[0]
+                    );
+                  }
+                }}
+              >
+                {Object.entries(
+                  options.materials
+                ).map(
+                  ([
+                    materialName,
+                    materialData,
+                  ]) => (
+                    <option
+                      key={materialName}
+                      value={materialName}
+                    >
+                      {
+                        materialData.label
+                      }
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="quality">
+                Print quality
+              </label>
+
+              <select
+                id="quality"
+                value={quality}
+                onChange={(event) => {
+                  setQuality(
+                    event.target.value
+                  );
+
+                  setEstimate(null);
+                }}
+              >
+                {availableQualities.map(
+                  (qualityName) => {
+                    const qualityData =
+                      options.qualities[
+                        qualityName
+                      ];
+
+                    return (
+                      <option
+                        key={qualityName}
+                        value={qualityName}
+                      >
+                        {
+                          qualityData.label
+                        }{" "}
+                        —{" "}
+                        {
+                          qualityData
+                            .layer_height_mm
+                        }{" "}
+                        mm
+                      </option>
+                    );
+                  }
+                )}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="quantity">
+                Quantity
+              </label>
+
+              <input
+                id="quantity"
+                type="number"
+                min="1"
+                value={quantity}
+                onChange={(event) => {
+                  setQuantity(
+                    Math.max(
+                      1,
+                      Number(
+                        event.target.value
+                      )
+                    )
+                  );
+
+                  setEstimate(null);
+                }}
+              />
+            </div>
+          </div>
+
+          <button
+            className="primary-button"
+            type="button"
+            onClick={calculateQuote}
+            disabled={
+              calculating || !file
+            }
+          >
+            {calculating
+              ? "Analysing model..."
+              : "Calculate quote"}
+          </button>
+
+          {calculating && (
+            <p className="processing-message">
+              Slicing your model and
+              calculating production costs.
+              This may take a few seconds.
             </p>
+          )}
 
-            <p>
-              Quality:{" "}
-              {estimate.quality}
-            </p>
+          {error && (
+            <div className="error-box">
+              {error}
+            </div>
+          )}
+        </section>
 
-            <p>
-              Quantity:{" "}
-              {estimate.quantity}
-            </p>
+        {estimate && (
+          <section className="result-card">
+            <div className="result-header">
+              <div>
+                <span className="eyebrow">
+                  QUOTE ESTIMATE
+                </span>
 
-            <h3>Printing</h3>
+                <h2>
+                  Your print estimate
+                </h2>
 
-            <p>
-              Print time each:{" "}
-              {
-                estimate.slicing
-                  .print_time
-              }
-            </p>
+                <p>
+                  {estimate.filename}
+                </p>
+              </div>
 
-            <p>
-              Filament each:{" "}
-              {
-                estimate.slicing
-                  .filament_g
-              }{" "}
-              g
-            </p>
+              <div className="price-block">
+                <span>
+                  Estimated price
+                </span>
 
-            <p>
-              Layers:{" "}
-              {
-                estimate.slicing
-                  .layers
-              }
-            </p>
+                <strong>
+                  €
+                  {estimate.pricing.summary
+                    .selling_price_eur
+                    .toFixed(2)}
+                </strong>
 
-            <h3>Price</h3>
+                <small>
+                  Excl. VAT
+                </small>
+              </div>
+            </div>
 
-            <p>
-              Production cost: €{" "}
-              {
-                estimate.pricing
-                  .summary
-                  .production_cost_eur
-              }
-            </p>
+            <div className="result-grid">
+              <div className="result-item">
+                <span>
+                  Material
+                </span>
 
-            <p>
-              Estimated price:
-            </p>
+                <strong>
+                  {estimate.material}
+                </strong>
+              </div>
 
-            <strong>
-              €{" "}
-              {
-                estimate.pricing
-                  .summary
-                  .selling_price_eur
-              }
-            </strong>
+              <div className="result-item">
+                <span>
+                  Quality
+                </span>
+
+                <strong>
+                  {
+                    options.qualities[
+                      estimate.quality
+                    ]?.label ??
+                    estimate.quality
+                  }
+                </strong>
+              </div>
+
+              <div className="result-item">
+                <span>
+                  Quantity
+                </span>
+
+                <strong>
+                  {estimate.quantity}
+                </strong>
+              </div>
+
+              <div className="result-item">
+                <span>
+                  Print time
+                </span>
+
+                <strong>
+                  {
+                    estimate.slicing
+                      .print_time
+                  }
+                </strong>
+              </div>
+
+              <div className="result-item">
+                <span>
+                  Filament
+                </span>
+
+                <strong>
+                  {
+                    estimate.slicing
+                      .filament_g
+                  }{" "}
+                  g
+                </strong>
+              </div>
+
+              <div className="result-item">
+                <span>
+                  Layers
+                </span>
+
+                <strong>
+                  {
+                    estimate.slicing
+                      .layers
+                  }
+                </strong>
+              </div>
+            </div>
+
+            <div className="dimensions">
+              <span>
+                Model dimensions
+              </span>
+
+              <strong>
+                {
+                  estimate.geometry
+                    .dimensions_mm.x
+                }{" "}
+                ×{" "}
+                {
+                  estimate.geometry
+                    .dimensions_mm.y
+                }{" "}
+                ×{" "}
+                {
+                  estimate.geometry
+                    .dimensions_mm.z
+                }{" "}
+                mm
+              </strong>
+            </div>
 
             {estimate.pricing.summary
               .minimum_order_applied && (
-              <p>
-                Minimum order value
-                applied.
-              </p>
+              <div className="notice-box">
+                Minimum order value applied.
+              </div>
             )}
+
+            <p className="estimate-note">
+              This is an automatic estimate.
+              Final production may require
+              technical review depending on
+              geometry and printability.
+            </p>
           </section>
-        </>
-      )}
-    </main>
+        )}
+      </main>
+    </div>
   );
 }
 
