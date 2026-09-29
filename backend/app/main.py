@@ -54,15 +54,57 @@ def health():
 def get_options():
     config = load_printing_config()
 
+    materials = {}
+
+    for material_name, material_data in config[
+        "materials"
+    ].items():
+        materials[material_name] = {
+            "label": material_data["label"],
+            "qualities": material_data[
+                "qualities"
+            ],
+        }
+
+    qualities = {}
+
+    for quality_name, quality_data in config[
+        "qualities"
+    ].items():
+        qualities[quality_name] = {
+            "label": quality_data["label"],
+            "layer_height_mm": quality_data[
+                "layer_height_mm"
+            ],
+        }
+
+    machines = {}
+
+    for machine_name, machine_data in config[
+        "machines"
+    ].items():
+        machines[machine_name] = {
+            "label": machine_data["label"],
+            "nozzle_diameter_mm": machine_data[
+                "nozzle_diameter_mm"
+            ],
+        }
+
     return {
         "defaults": {
-            "machine": config["default_machine"],
-            "material": config["default_material"],
-            "quality": config["default_quality"],
+            "machine": config[
+                "default_machine"
+            ],
+            "material": config[
+                "default_material"
+            ],
+            "quality": config[
+                "default_quality"
+            ],
         },
-        "materials": config["materials"],
-        "qualities": config["qualities"],
-        "machines": config["machines"],
+        "materials": materials,
+        "qualities": qualities,
+        "machines": machines,
     }
 
 @app.post("/upload")
