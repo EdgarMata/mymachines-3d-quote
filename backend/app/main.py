@@ -7,7 +7,11 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from app.services.pricing import calculate_pricing
 from app.services.slicer import slice_stl
-
+from app.services.printing_config import (
+    get_available_materials,
+    get_available_qualities,
+    load_printing_config,
+)
 
 app = FastAPI(
     title="MyMachines 3D Quote API",
@@ -46,6 +50,20 @@ def health():
         "status": "healthy"
     }
 
+@app.get("/options")
+def get_options():
+    config = load_printing_config()
+
+    return {
+        "defaults": {
+            "machine": config["default_machine"],
+            "material": config["default_material"],
+            "quality": config["default_quality"],
+        },
+        "materials": config["materials"],
+        "qualities": config["qualities"],
+        "machines": config["machines"],
+    }
 
 @app.post("/upload")
 async def upload_model(file: UploadFile = File(...)):
@@ -173,6 +191,7 @@ async def estimate_model(
     file: UploadFile = File(...),
     quantity: int = 1,
     material: str = "PLA",
+    quality: str = "standard",
 ):
     filename = file.filename or ""
 
@@ -183,13 +202,29 @@ async def estimate_model(
         )
 
     material = material.upper()
+    quality = quality.lower()
 
-    if material not in {"PLA", "PETG"}:
+    available_materials = get_available_materials()
+
+    if material not in available_materials:
         raise HTTPException(
             status_code=400,
             detail=(
                 "Unsupported material. "
-                "Available materials: PLA, PETG."
+                f"Available materials: "
+                f"{', '.join(available_materials)}."
+            ),
+        )
+
+    available_qualities = get_available_qualities()
+
+    if quality not in available_qualities:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Unsupported quality. "
+                f"Available qualities: "
+                f"{', '.join(available_qualities)}."
             ),
         )
 
@@ -302,6 +337,7 @@ async def estimate_model(
             slicing = slice_stl(
                 stl_path,
                 material=material,
+                quality=quality,
             )
 
     except Exception as exc:
@@ -339,6 +375,7 @@ async def estimate_model(
         "filename": filename,
         "quantity": quantity,
         "material": material,
+        "quality": quality,
         "status": "estimated",
 
         "geometry": geometry,

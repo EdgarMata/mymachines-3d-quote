@@ -1,7 +1,12 @@
+
 import re
 import subprocess
 import tempfile
 from pathlib import Path
+from app.services.printing_config import (
+    get_filament_profile,
+    get_process_profile,
+)
 
 
 PROJECT_ROOT = Path.home() / "Projetos" / "mymachines-3d-quote"
@@ -19,18 +24,6 @@ ORCA_PRINTER_PROFILE = (
     / ".var/app/com.orcaslicer.OrcaSlicer/config/OrcaSlicer/system/Prusa/machine"
     / "Prusa MK3S 0.4 nozzle.json"
 )
-
-FILAMENT_PROFILES = {
-    "PLA": (
-        PROJECT_ROOT
-        / "profiles/filaments/mymachines_pla.json"
-    ),
-    "PETG": (
-        PROJECT_ROOT
-        / "profiles/filaments/mymachines_petg.json"
-    ),
-}
-
 
 def parse_print_time(value: str) -> int:
     """
@@ -140,17 +133,18 @@ def extract_gcode_stats(gcode_path: Path) -> dict:
 def slice_stl(
     stl_path: Path,
     material: str = "PLA",
+    quality: str = "standard",
 ) -> dict:
     stl_path = Path(stl_path).resolve()
     material = material.upper()
+    quality = quality.lower()
 
-    if material not in FILAMENT_PROFILES:
-        raise ValueError(
-            f"Unsupported material: {material}"
-        )
+    filament_profile = get_filament_profile(
+        material
+    )
 
-    filament_profile = (
-        FILAMENT_PROFILES[material]
+    process_profile = get_process_profile(
+        quality
     )
 
     if not stl_path.exists():
@@ -173,7 +167,7 @@ def slice_stl(
 
             "--load-settings",
             (
-                f"{ORCA_PROCESS_PROFILE};"
+                f"{process_profile};"
                 f"{ORCA_PRINTER_PROFILE}"
             ),
 
@@ -228,11 +222,12 @@ def slice_stl(
                 ORCA_PRINTER_PROFILE.name
             ),
             "process_profile": (
-                ORCA_PROCESS_PROFILE.name
-             ),
+                process_profile.name
+            ),
             "filament_profile": (
                 filament_profile.name
             ),
             "material": material,
+            "quality": quality,
             **stats,
         }
