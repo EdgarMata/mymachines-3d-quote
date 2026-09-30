@@ -20,10 +20,18 @@ type Orientation = {
   z: number;
 };
 
+type BuildVolume = {
+  x: number;
+  y: number;
+  z: number;
+};
+
 type ModelViewerProps = {
   file: File;
 
   orientation: Orientation;
+
+  buildVolume: BuildVolume;
 
   onOrientationChange: (orientation: Orientation) => void;
 };
@@ -152,6 +160,7 @@ function STLModel({
 function ModelViewer({
   file,
   orientation,
+  buildVolume,
   onOrientationChange,
 }: ModelViewerProps) {
   const [placeFaceMode, setPlaceFaceMode] = useState(false);
@@ -239,13 +248,14 @@ function ModelViewer({
 
           <Suspense fallback={null}>
             {/* Print bed - Prusa MK3S */}
-            <mesh position={[0, 0, -0.65]} receiveShadow>
-              <boxGeometry args={[250, 210, 1]} />
+            <mesh position={[0, 0, -0.15]} receiveShadow>
+              <planeGeometry args={[buildVolume.x, buildVolume.y]} />
 
               <meshStandardMaterial
                 color="#edf1f5"
                 roughness={0.85}
                 metalness={0.05}
+                side={THREE.FrontSide}
               />
 
               <Edges color="#39aaf5" threshold={15} />
@@ -253,7 +263,7 @@ function ModelViewer({
 
             {/* Print bed grid */}
             <Grid
-              args={[250, 210]}
+              args={[buildVolume.x, buildVolume.y]}
               rotation={[Math.PI / 2, 0, 0]}
               position={[0, 0, -0.13]}
               infiniteGrid={false}
