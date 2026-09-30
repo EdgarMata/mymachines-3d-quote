@@ -241,6 +241,126 @@ async def slice_model(file: UploadFile = File(...)):
         "slicing": result,
     }
 
+@app.post("/analyze")
+async def analyze_model(
+    file: UploadFile = File(...),
+    rotation_x: float = 0,
+    rotation_y: float = 0,
+    rotation_z: float = 0,
+):
+    """
+    Analyze the oriented model and identify compatible machines.
+
+    This endpoint does not perform slicing or calculate pricing.
+    """
+
+    filename = file.filename or ""
+
+    if not filename.lower().endswith(".stl"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only STL files are supported.",
+        )
+
+    contents = await file.read()
+
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded file is empty.",
+        )
+
+    project_root = (
+        Path.home()
+        / "Projetos"
+        / "mymachines-3d-quote"
+    )
+
+    temp_root = project_root / "tmp" / "analysis"
+
+    temp_root.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    try:
+        with tempfile.TemporaryDirectory(dir=temp_root) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+
+            original_stl = tmp_path / "original.stl"
+            oriented_stl = tmp_path / "oriented.stl"
+
+            original_stl.write_bytes(contents)
+
+            # Apply the orientation selected in the viewer.
+            orientation_result = orient_stl(
+                input_path=original_stl,
+                output_path=oriented_stl,
+                x=rotation_x,
+                y=rotation_y,
+                z=rotation_z,
+            )
+
+            # Identify machines using the oriented dimensions.
+            machine_selection = select_machine(
+                orientation_result["dimensions_mm"]
+            )
+
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model analysis failed: {exc}",
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Model analysis failed: {exc}",
+        ) from exc
+
+    # The temporary STL has already been deleted.
+    # Do not expose its former filesystem path.
+    orientation_result.pop("output_file", None)
+
+    # Determine which machine should be shown in the viewer.
+    selected_machine = machine_selection["selected_machine"]
+
+    if selected_machine is None:
+        compatible = machine_selection["compatible_machines"]
+
+        if compatible:
+            # Use the first physically compatible machine
+            # when automatic quoting is not yet available.
+            selected_machine = compatible[0]
+
+        else:
+            # No machine fits: display the largest configured
+            # build volume as a visual reference.
+            config = load_printing_config()
+
+            largest_id, largest_data = max(
+                config["machines"].items(),
+                key=lambda item: (
+                    item[1]["build_volume_mm"]["x"]
+                    * item[1]["build_volume_mm"]["y"]
+                    * item[1]["build_volume_mm"]["z"]
+                ),
+            )
+
+            selected_machine = {
+                "id": largest_id,
+                "label": largest_data["label"],
+                "build_volume_mm": largest_data["build_volume_mm"],
+                "quoting_enabled": largest_data["quoting_enabled"],
+            }
+
+    return {
+        "filename": filename,
+        "status": machine_selection["status"],
+        "orientation": orientation_result,
+        "machine_selection": machine_selection,
+        "display_machine": selected_machine,
+    }
 
 @app.post("/estimate")
 async def estimate_model(

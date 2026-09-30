@@ -136,6 +136,19 @@ type ReviewEstimate = EstimateBase & {
 
 type EstimateResponse = SuccessfulEstimate | ReviewEstimate;
 
+type AnalyzeResponse = {
+  filename: string;
+
+  status: "ready" | "technical_review_required" | "model_exceeds_build_volume";
+
+  display_machine: {
+    id: string;
+    label: string;
+    build_volume_mm: Dimensions;
+    quoting_enabled: boolean;
+  };
+};
+
 function App() {
   const [options, setOptions] = useState<OptionsResponse | null>(null);
 
@@ -160,6 +173,14 @@ function App() {
   const [error, setError] = useState<string | null>(null);
 
   const [estimate, setEstimate] = useState<EstimateResponse | null>(null);
+
+  const [displayMachine, setDisplayMachine] = useState<
+    AnalyzeResponse["display_machine"] | null
+  >(null);
+
+  const [analyzing, setAnalyzing] = useState(false);
+
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadOptions() {
@@ -191,6 +212,74 @@ function App() {
 
     loadOptions();
   }, []);
+
+  useEffect(() => {
+    if (!file || !options) {
+      setDisplayMachine(null);
+      setAnalyzing(false);
+      setAnalysisError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function analyzeModel() {
+      try {
+        setAnalyzing(true);
+        setAnalysisError(null);
+
+        // Use the default printer while analyzing.
+        setDisplayMachine(null);
+
+        const formData = new FormData();
+
+        formData.append("file", file!);
+
+        const params = new URLSearchParams({
+          rotation_x: orientation.x.toString(),
+          rotation_y: orientation.y.toString(),
+          rotation_z: orientation.z.toString(),
+        });
+
+        const response = await fetch(
+          `http://127.0.0.1:8000/analyze?${params.toString()}`,
+          {
+            method: "POST",
+            body: formData,
+            signal: controller.signal,
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error(`Model analysis failed (${response.status}).`);
+        }
+
+        const data: AnalyzeResponse = await response.json();
+
+        if (!controller.signal.aborted) {
+          setDisplayMachine(data.display_machine);
+        }
+      } catch (err) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setAnalysisError(
+          err instanceof Error ? err.message : "Unable to analyze the model.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setAnalyzing(false);
+        }
+      }
+    }
+
+    analyzeModel();
+
+    return () => {
+      controller.abort();
+    };
+  }, [file, options, orientation.x, orientation.y, orientation.z]);
 
   async function calculateQuote() {
     if (!file) {
@@ -338,12 +427,27 @@ function App() {
                 <h3>3D Preview</h3>
 
                 <p>Drag to inspect the model. Scroll to zoom.</p>
+                <p>
+                  {analyzing
+                    ? "Checking available print beds..."
+                    : `Build plate: ${
+                        displayMachine?.label ??
+                        options.machines[options.defaults.machine].label
+                      }`}
+                </p>
+
+                {analysisError && (
+                  <p role="alert">
+                    {analysisError} Showing the default build plate.
+                  </p>
+                )}
               </div>
 
               <ModelViewer
                 file={file}
                 orientation={orientation}
                 buildVolume={
+                  displayMachine?.build_volume_mm ??
                   options.machines[options.defaults.machine].build_volume_mm
                 }
                 onOrientationChange={(newOrientation) => {
