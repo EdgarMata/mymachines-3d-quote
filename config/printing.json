@@ -46,7 +46,9 @@
         "y": 180,
         "z": 180
       },
-      "quoting_enabled": false
+      "quoting_enabled": false,
+      "profile_ready": false,
+      "operational": true
     },
 
     "prusa_mk3s_04": {
@@ -58,7 +60,9 @@
         "z": 210
       },
       "machine_profile": "prusa_mk3s_04.json",
-      "quoting_enabled": true
+      "quoting_enabled": true,
+      "profile_ready": true,
+      "operational": true
     },
 
     "my_cloner_04": {
@@ -69,7 +73,9 @@
         "y": 235,
         "z": 220
       },
-      "quoting_enabled": false
+      "quoting_enabled": false,
+      "profile_ready": false,
+      "operational": true
     },
 
     "my_corexy_04": {
@@ -80,7 +86,9 @@
         "y": 400,
         "z": 400
       },
-      "quoting_enabled": false
+      "quoting_enabled": false,
+      "profile_ready": false,
+      "operational": true
     },
 
     "my_giga1m3": {
@@ -91,7 +99,9 @@
         "y": 1000,
         "z": 1000
       },
-      "quoting_enabled": false
+      "quoting_enabled": false,
+      "profile_ready": false,
+      "operational": true
     }
   }
 }

@@ -1,0 +1,55 @@
+{
+  "currency": "EUR",
+  "machines": {
+    "my_mini_04": {
+      "name": "MyMini",
+      "purchase_cost_eur": 450.0,
+      "residual_value_eur": 50.0,
+      "lifetime_hours": 6000,
+      "maintenance_cost_per_hour_eur": 0.2,
+      "average_power_kw": 0.065,
+      "setup_minutes": 10,
+      "postprocess_minutes_per_piece": 5
+    },
+    "prusa_mk3s_04": {
+      "name": "Prusa MK3S",
+      "purchase_cost_eur": 900.0,
+      "residual_value_eur": 100.0,
+      "lifetime_hours": 6000,
+      "maintenance_cost_per_hour_eur": 0.25,
+      "average_power_kw": 0.08,
+      "setup_minutes": 10,
+      "postprocess_minutes_per_piece": 5
+    },
+    "my_cloner_04": {
+      "name": "MyCloner",
+      "purchase_cost_eur": 900.0,
+      "residual_value_eur": 100.0,
+      "lifetime_hours": 6000,
+      "maintenance_cost_per_hour_eur": 0.25,
+      "average_power_kw": 0.08,
+      "setup_minutes": 10,
+      "postprocess_minutes_per_piece": 5
+    },
+    "my_corexy_04": {
+      "name": "MyCoreXY",
+      "purchase_cost_eur": 1800.0,
+      "residual_value_eur": 200.0,
+      "lifetime_hours": 6000,
+      "maintenance_cost_per_hour_eur": 0.4,
+      "average_power_kw": 0.2,
+      "setup_minutes": 15,
+      "postprocess_minutes_per_piece": 7
+    },
+    "my_giga1m3": {
+      "name": "MyGiga1M3",
+      "purchase_cost_eur": 15000.0,
+      "residual_value_eur": 1500.0,
+      "lifetime_hours": 6000,
+      "maintenance_cost_per_hour_eur": 1.5,
+      "average_power_kw": 2.5,
+      "setup_minutes": 30,
+      "postprocess_minutes_per_piece": 15
+    }
+  }
+}

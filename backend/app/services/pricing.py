@@ -15,6 +15,11 @@ PRICING_CONFIG_FILE = (
     / "pricing.json"
 )
 
+MACHINE_COSTS_FILE = (
+    PROJECT_ROOT
+    / "config"
+    / "machine_costs.json"
+)
 
 @dataclass
 class PricingConfig:
@@ -38,19 +43,50 @@ class PricingConfig:
     minimum_order_eur: float
 
 
-def load_pricing_config() -> PricingConfig:
+def load_pricing_config(
+    machine_id: str | None = None,
+) -> PricingConfig:
+
     if not PRICING_CONFIG_FILE.exists():
         raise FileNotFoundError(
             f"Pricing config not found: {PRICING_CONFIG_FILE}"
         )
 
+    if not MACHINE_COSTS_FILE.exists():
+        raise FileNotFoundError(
+            f"Machine costs config not found: {MACHINE_COSTS_FILE}"
+        )
+
+    # Load general company pricing settings
     data = json.loads(
         PRICING_CONFIG_FILE.read_text(
             encoding="utf-8"
         )
     )
 
-    machine = data["machine"]
+    # Load individual machine costs
+    machine_costs = json.loads(
+        MACHINE_COSTS_FILE.read_text(
+            encoding="utf-8"
+        )
+    )
+
+    # Preserve the configured default machine
+    if machine_id is None:
+        from app.services.printing_config import load_printing_config
+
+        printing_config = load_printing_config()
+
+        machine_id = printing_config["default_machine"]
+
+    # Validate machine
+    if machine_id not in machine_costs["machines"]:
+        raise ValueError(
+            f"Machine costs not configured: {machine_id}"
+        )
+
+    machine = machine_costs["machines"][machine_id]
+
     energy = data["energy"]
     labour = data["labour"]
     risk = data["risk"]
@@ -62,9 +98,11 @@ def load_pricing_config() -> PricingConfig:
         machine_purchase_cost_eur=(
             machine["purchase_cost_eur"]
         ),
+
         machine_residual_value_eur=(
             machine["residual_value_eur"]
         ),
+
         machine_lifetime_hours=(
             machine["lifetime_hours"]
         ),
@@ -72,9 +110,11 @@ def load_pricing_config() -> PricingConfig:
         maintenance_cost_per_hour_eur=(
             machine["maintenance_cost_per_hour_eur"]
         ),
+
         average_power_kw=(
             machine["average_power_kw"]
         ),
+
         electricity_cost_per_kwh_eur=(
             energy["electricity_cost_per_kwh_eur"]
         ),
@@ -82,16 +122,19 @@ def load_pricing_config() -> PricingConfig:
         labour_cost_per_hour_eur=(
             labour["cost_per_hour_eur"]
         ),
+
         setup_minutes=(
-            labour["setup_minutes"]
+            machine["setup_minutes"]
         ),
+
         postprocess_minutes_per_piece=(
-            labour["postprocess_minutes_per_piece"]
+            machine["postprocess_minutes_per_piece"]
         ),
 
         failure_rate_percent=(
             risk["failure_rate_percent"]
         ),
+
         target_margin_percent=(
             commercial["target_margin_percent"]
         ),
@@ -100,7 +143,6 @@ def load_pricing_config() -> PricingConfig:
             commercial["minimum_order_eur"]
         ),
     )
-
 
 def calculate_pricing(
     *,

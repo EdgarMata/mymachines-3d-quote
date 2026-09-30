@@ -53,12 +53,25 @@ def select_machine(
         if not fits:
             continue
 
+        quoting_enabled = machine_data["quoting_enabled"]
+        profile_ready = machine_data["profile_ready"]
+        operational = machine_data["operational"]
+
+        automatic_quoting_ready = (
+            quoting_enabled
+            and profile_ready
+            and operational
+        )
+
         compatible_machines.append(
             {
                 "id": machine_id,
                 "label": machine_data["label"],
                 "build_volume_mm": volume,
-                "quoting_enabled": machine_data["quoting_enabled"],
+                "quoting_enabled": quoting_enabled,
+                "profile_ready": profile_ready,
+                "operational": operational,
+                "automatic_quoting_ready": automatic_quoting_ready,
             }
         )
 
@@ -66,7 +79,7 @@ def select_machine(
     quoting_candidates = [
         machine
         for machine in compatible_machines
-        if machine["quoting_enabled"]
+        if machine["automatic_quoting_ready"]
     ]
 
     selected_machine = None

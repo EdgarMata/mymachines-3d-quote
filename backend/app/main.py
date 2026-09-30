@@ -7,7 +7,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.orientation import orient_stl
 from app.services.machine_selector import select_machine
-from app.services.pricing import calculate_pricing
+from app.services.pricing import calculate_pricing, load_pricing_config
 from app.services.slicer import slice_stl
 from app.services.printing_config import (
     get_available_materials,
@@ -585,14 +585,27 @@ async def estimate_model(
     # ---------------------------------------------
 
     try:
+        # Get the machine selected by the compatibility engine.
+        selected_machine = machine_selection["selected_machine"]
+
+        if selected_machine is None:
+            raise ValueError(
+                "No machine selected for automatic quotation."
+            )
+
+        machine_id = selected_machine["id"]
+
+        # Load the individual costs of the selected machine.
+        machine_pricing_config = load_pricing_config(
+            machine_id=machine_id
+        )
+
+        # Calculate the quotation using those costs.
         pricing = calculate_pricing(
-            filament_cost_eur=(
-                slicing["material_cost_eur"]
-            ),
-            print_time_seconds=(
-                slicing["print_time_seconds"]
-            ),
+            filament_cost_eur=slicing["material_cost_eur"],
+            print_time_seconds=slicing["print_time_seconds"],
             quantity=quantity,
+            config=machine_pricing_config,
         )
 
     except Exception as exc:
