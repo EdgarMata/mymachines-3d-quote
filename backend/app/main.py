@@ -568,10 +568,14 @@ async def estimate_model(
             # Slicing
             # ---------------------------------------------
 
+            selected_machine = machine_selection["selected_machine"]
+            selected_machine_id = selected_machine["id"]
+
             slicing = slice_stl(
                 oriented_stl,
                 material=material,
                 quality=quality,
+                machine_id=selected_machine_id,
             )
 
     except Exception as exc:

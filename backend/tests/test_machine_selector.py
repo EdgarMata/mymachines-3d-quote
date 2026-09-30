@@ -21,7 +21,10 @@ class TestMachineSelector(unittest.TestCase):
             "z": 20,
         })
 
-        self.assertEqual(result["status"], "ready")
+        self.assertEqual(
+            result["status"],
+            "ready",
+        )
 
         self.assertEqual(
             result["selected_machine"]["id"],
@@ -30,15 +33,48 @@ class TestMachineSelector(unittest.TestCase):
 
         self.assertEqual(
             result["quoting_candidates_count"],
-            1,
+            2,
         )
 
-    def test_machine_breakdown(self):
-        """An unavailable printer must not receive automatic quotes."""
+    def test_machine_breakdown_uses_alternative_machine(self):
+        """A compatible operational machine must replace an unavailable printer."""
 
         config = deepcopy(load_printing_config())
 
         config["machines"]["prusa_mk3s_04"]["operational"] = False
+
+        with patch(
+            "app.services.machine_selector.load_printing_config",
+            return_value=config,
+        ):
+            result = select_machine({
+                "x": 130,
+                "y": 72,
+                "z": 20,
+            })
+
+        self.assertEqual(
+            result["status"],
+            "ready",
+        )
+
+        self.assertEqual(
+            result["selected_machine"]["id"],
+            "my_cloner_04",
+        )
+
+        self.assertEqual(
+            result["quoting_candidates_count"],
+            1,
+        )
+
+    def test_all_compatible_machines_unavailable(self):
+        """Technical review is required when no compatible printer is available."""
+
+        config = deepcopy(load_printing_config())
+
+        config["machines"]["prusa_mk3s_04"]["operational"] = False
+        config["machines"]["my_cloner_04"]["operational"] = False
 
         with patch(
             "app.services.machine_selector.load_printing_config",
@@ -62,6 +98,30 @@ class TestMachineSelector(unittest.TestCase):
         self.assertEqual(
             result["quoting_candidates_count"],
             0,
+        )
+
+    def test_my_cloner_selected_when_prusa_is_too_small(self):
+        """MyCloner must be selected when the model does not fit the Prusa."""
+
+        result = select_machine({
+            "x": 220,
+            "y": 220,
+            "z": 100,
+        })
+
+        self.assertEqual(
+            result["status"],
+            "ready",
+        )
+
+        self.assertEqual(
+            result["selected_machine"]["id"],
+            "my_cloner_04",
+        )
+
+        self.assertEqual(
+            result["quoting_candidates_count"],
+            1,
         )
 
     def test_model_exceeds_all_build_volumes(self):

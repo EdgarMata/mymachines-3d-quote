@@ -19,11 +19,17 @@ ORCA_PROCESS_PROFILE = (
     / "0.20mm Standard @MK3S 0.4.json"
 )
 
-ORCA_PRINTER_PROFILE = (
-    Path.home()
-    / ".var/app/com.orcaslicer.OrcaSlicer/config/OrcaSlicer/system/Prusa/machine"
-    / "Prusa MK3S 0.4 nozzle.json"
-)
+ORCA_PRINTER_PROFILES = {
+    "prusa_mk3s_04": (
+        Path.home()
+        / ".var/app/com.orcaslicer.OrcaSlicer/config/OrcaSlicer/system/Prusa/machine"
+        / "Prusa MK3S 0.4 nozzle.json"
+    ),
+    "my_cloner_04": (
+        PROJECT_ROOT
+        / "profiles/printers/my_cloner_04.json"
+    ),
+}
 
 def parse_print_time(value: str) -> int:
     """
@@ -134,10 +140,23 @@ def slice_stl(
     stl_path: Path,
     material: str = "PLA",
     quality: str = "standard",
+    machine_id: str = "prusa_mk3s_04",
 ) -> dict:
     stl_path = Path(stl_path).resolve()
     material = material.upper()
     quality = quality.lower()
+
+    if machine_id not in ORCA_PRINTER_PROFILES:
+        raise ValueError(
+            f"No OrcaSlicer profile configured for machine: {machine_id}"
+        )
+
+    printer_profile = ORCA_PRINTER_PROFILES[machine_id]
+
+    if not printer_profile.is_file():
+        raise FileNotFoundError(
+            f"Printer profile not found: {printer_profile}"
+        )
 
     filament_profile = get_filament_profile(
         material
@@ -168,7 +187,7 @@ def slice_stl(
             "--load-settings",
             (
                 f"{process_profile};"
-                f"{ORCA_PRINTER_PROFILE}"
+                f"{printer_profile}"
             ),
 
             "--load-filaments",
@@ -218,9 +237,8 @@ def slice_stl(
         return {
             "status": "success",
             "slicer": "OrcaSlicer",
-            "printer_profile": (
-                ORCA_PRINTER_PROFILE.name
-            ),
+            "machine_id": machine_id,
+            "printer_profile": printer_profile.name,
             "process_profile": (
                 process_profile.name
             ),

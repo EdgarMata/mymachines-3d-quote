@@ -59,7 +59,7 @@
         "y": 210,
         "z": 210
       },
-      "machine_profile": "prusa_mk3s_04.json",
+      "machine_profile": "prusa_mk3s_0.4.json",
       "quoting_enabled": true,
       "profile_ready": true,
       "operational": true
@@ -73,8 +73,9 @@
         "y": 235,
         "z": 220
       },
-      "quoting_enabled": false,
-      "profile_ready": false,
+      "machine_profile": "my_cloner_04.json",
+      "quoting_enabled": true,
+      "profile_ready": true,
       "operational": true
     },
 
