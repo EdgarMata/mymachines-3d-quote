@@ -5,6 +5,7 @@ from pathlib import Path
 import trimesh
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from app.services.orientation import orient_stl
 from app.services.pricing import calculate_pricing
 from app.services.slicer import slice_stl
 from app.services.printing_config import (
@@ -244,6 +245,9 @@ async def estimate_model(
     quantity: int = 1,
     material: str = "PLA",
     quality: str = "standard",
+    rotation_x: float = 0,
+    rotation_y: float = 0,
+    rotation_z: float = 0,
 ):
     filename = file.filename or ""
 
@@ -377,17 +381,31 @@ async def estimate_model(
         ) as tmp_dir:
             tmp_path = Path(tmp_dir)
 
-            stl_path = (
-                tmp_path
-                / filename
+            # Save original STL
+            original_stl = (
+                tmp_path / "original.stl"
             )
 
-            stl_path.write_bytes(
+            original_stl.write_bytes(
                 contents
             )
 
+            # Prepare oriented STL
+            oriented_stl = (
+                tmp_path / "oriented.stl"
+            )
+
+            orientation_result = orient_stl(
+                input_path=original_stl,
+                output_path=oriented_stl,
+                x=rotation_x,
+                y=rotation_y,
+                z=rotation_z,
+            )
+
+            # Slice the oriented model
             slicing = slice_stl(
-                stl_path,
+                oriented_stl,
                 material=material,
                 quality=quality,
             )
@@ -431,6 +449,10 @@ async def estimate_model(
         "status": "estimated",
 
         "geometry": geometry,
+
+        "orientation": orientation_result,
+
         "slicing": slicing,
+
         "pricing": pricing,
-    }
+}

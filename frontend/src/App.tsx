@@ -176,6 +176,9 @@ function App() {
         quantity: quantity.toString(),
         material,
         quality,
+        rotation_x: orientation.x.toString(),
+        rotation_y: orientation.y.toString(),
+        rotation_z: orientation.z.toString(),
       });
 
       const response = await fetch(
@@ -350,9 +353,11 @@ setError(null);
               <ModelViewer
                 file={file}
                 orientation={orientation}
-                onOrientationChange={
-                  setOrientation
-                }
+                onOrientationChange={(newOrientation) => {
+                  setOrientation(newOrientation);
+                  setEstimate(null);
+                  setError(null);
+                }}
               />
             </div>
           )}
