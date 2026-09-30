@@ -7,34 +7,26 @@
     "PLA": {
       "label": "PLA",
       "filament_profile": "mymachines_pla.json",
-      "qualities": [
-        "draft",
-        "standard",
-        "fine"
-      ]
+      "qualities": ["draft", "standard", "fine"]
     },
 
     "PETG": {
       "label": "PETG",
       "filament_profile": "mymachines_petg.json",
-      "qualities": [
-        "draft",
-        "standard",
-        "fine"
-      ]
+      "qualities": ["draft", "standard", "fine"]
     }
   },
 
   "qualities": {
     "draft": {
       "label": "Draft",
-      "layer_height_mm": 0.30,
+      "layer_height_mm": 0.3,
       "process_profile": "draft.json"
     },
 
     "standard": {
       "label": "Standard",
-      "layer_height_mm": 0.20,
+      "layer_height_mm": 0.2,
       "process_profile": "standard.json"
     },
 
@@ -46,10 +38,60 @@
   },
 
   "machines": {
+    "my_mini_04": {
+      "label": "MyMini - 0.4 mm",
+      "nozzle_diameter_mm": 0.4,
+      "build_volume_mm": {
+        "x": 180,
+        "y": 180,
+        "z": 180
+      },
+      "quoting_enabled": false
+    },
+
     "prusa_mk3s_04": {
       "label": "Prusa MK3S - 0.4 mm",
       "nozzle_diameter_mm": 0.4,
-      "machine_profile": "prusa_mk3s_04.json"
+      "build_volume_mm": {
+        "x": 250,
+        "y": 210,
+        "z": 210
+      },
+      "machine_profile": "prusa_mk3s_04.json",
+      "quoting_enabled": true
+    },
+
+    "my_cloner_04": {
+      "label": "MyCloner - 0.4 mm",
+      "nozzle_diameter_mm": 0.4,
+      "build_volume_mm": {
+        "x": 235,
+        "y": 235,
+        "z": 220
+      },
+      "quoting_enabled": false
+    },
+
+    "my_corexy_04": {
+      "label": "MyCoreXY - 0.4 mm",
+      "nozzle_diameter_mm": 0.4,
+      "build_volume_mm": {
+        "x": 400,
+        "y": 400,
+        "z": 400
+      },
+      "quoting_enabled": false
+    },
+
+    "my_giga1m3": {
+      "label": "MyGiga1M3",
+      "nozzle_diameter_mm": 0.8,
+      "build_volume_mm": {
+        "x": 1000,
+        "y": 1000,
+        "z": 1000
+      },
+      "quoting_enabled": false
     }
   }
 }
