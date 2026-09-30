@@ -15,6 +15,14 @@ type QualityOption = {
 type MachineOption = {
   label: string;
   nozzle_diameter_mm: number;
+
+  build_volume_mm: {
+    x: number;
+    y: number;
+    z: number;
+  };
+
+  quoting_enabled: boolean;
 };
 
 type OptionsResponse = {
@@ -28,35 +36,49 @@ type OptionsResponse = {
   machines: Record<string, MachineOption>;
 };
 
-type EstimateResponse = {
+type Dimensions = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+type MachineSelection = {
+  status: string;
+  model_dimensions_mm: Dimensions;
+  default_machine: string;
+
+  selected_machine: {
+    id: string;
+    label: string;
+    build_volume_mm: Dimensions;
+    quoting_enabled: boolean;
+  } | null;
+
+  compatible_machines: {
+    id: string;
+    label: string;
+    build_volume_mm: Dimensions;
+    quoting_enabled: boolean;
+  }[];
+
+  compatible_count: number;
+  quoting_candidates_count: number;
+};
+
+type EstimateBase = {
   filename: string;
   quantity: number;
   material: string;
   quality: string;
-  status: string;
 
   geometry: {
-    dimensions_mm: {
-      x: number;
-      y: number;
-      z: number;
-    };
+    dimensions_mm: Dimensions;
   };
 
   orientation: {
     status: string;
-
-    rotation_degrees: {
-      x: number;
-      y: number;
-      z: number;
-    };
-
-    dimensions_mm: {
-      x: number;
-      y: number;
-      z: number;
-    };
+    rotation_degrees: Dimensions;
+    dimensions_mm: Dimensions;
 
     bed_position: {
       minimum_z_mm: number;
@@ -64,6 +86,12 @@ type EstimateResponse = {
 
     output_file: string;
   };
+
+  machine_selection: MachineSelection;
+};
+
+type SuccessfulEstimate = EstimateBase & {
+  status: "estimated";
 
   slicing: {
     filament_g: number;
@@ -98,6 +126,15 @@ type EstimateResponse = {
     };
   };
 };
+
+type ReviewEstimate = EstimateBase & {
+  status: "technical_review_required" | "model_exceeds_build_volume";
+  message: string;
+  slicing: null;
+  pricing: null;
+};
+
+type EstimateResponse = SuccessfulEstimate | ReviewEstimate;
 
 function App() {
   const [options, setOptions] = useState<OptionsResponse | null>(null);
@@ -306,6 +343,9 @@ function App() {
               <ModelViewer
                 file={file}
                 orientation={orientation}
+                buildVolume={
+                  options.machines[options.defaults.machine].build_volume_mm
+                }
                 onOrientationChange={(newOrientation) => {
                   setOrientation(newOrientation);
                   setEstimate(null);
@@ -408,85 +448,127 @@ function App() {
 
         {estimate && (
           <section className="result-card">
-            <div className="result-header">
-              <div>
-                <span className="eyebrow">QUOTE ESTIMATE</span>
+            {estimate.status === "estimated" ? (
+              <>
+                <div className="result-header">
+                  <div>
+                    <span className="eyebrow">QUOTE ESTIMATE</span>
 
-                <h2>Your print estimate</h2>
+                    <h2>Your print estimate</h2>
 
-                <p>{estimate.filename}</p>
-              </div>
+                    <p>{estimate.filename}</p>
+                  </div>
 
-              <div className="price-block">
-                <span>Estimated price</span>
+                  <div className="price-block">
+                    <span>Estimated price</span>
 
-                <strong>
-                  €{estimate.pricing.summary.selling_price_eur.toFixed(2)}
-                </strong>
+                    <strong>
+                      €{estimate.pricing.summary.selling_price_eur.toFixed(2)}
+                    </strong>
 
-                <small>Excl. VAT</small>
-              </div>
-            </div>
+                    <small>Excl. VAT</small>
+                  </div>
+                </div>
 
-            <div className="result-grid">
-              <div className="result-item">
-                <span>Material</span>
+                <div className="result-grid">
+                  <div className="result-item">
+                    <span>Material</span>
+                    <strong>{estimate.material}</strong>
+                  </div>
 
-                <strong>{estimate.material}</strong>
-              </div>
+                  <div className="result-item">
+                    <span>Quality</span>
+                    <strong>
+                      {options.qualities[estimate.quality]?.label ??
+                        estimate.quality}
+                    </strong>
+                  </div>
 
-              <div className="result-item">
-                <span>Quality</span>
+                  <div className="result-item">
+                    <span>Quantity</span>
+                    <strong>{estimate.quantity}</strong>
+                  </div>
 
-                <strong>
-                  {options.qualities[estimate.quality]?.label ??
-                    estimate.quality}
-                </strong>
-              </div>
+                  <div className="result-item">
+                    <span>Print time</span>
+                    <strong>{estimate.slicing.print_time}</strong>
+                  </div>
 
-              <div className="result-item">
-                <span>Quantity</span>
+                  <div className="result-item">
+                    <span>Filament</span>
+                    <strong>{estimate.slicing.filament_g} g</strong>
+                  </div>
 
-                <strong>{estimate.quantity}</strong>
-              </div>
+                  <div className="result-item">
+                    <span>Layers</span>
+                    <strong>{estimate.slicing.layers}</strong>
+                  </div>
+                </div>
 
-              <div className="result-item">
-                <span>Print time</span>
+                <div className="dimensions">
+                  <span>Print dimensions</span>
 
-                <strong>{estimate.slicing.print_time}</strong>
-              </div>
+                  <strong>
+                    {estimate.orientation.dimensions_mm.x} ×{" "}
+                    {estimate.orientation.dimensions_mm.y} ×{" "}
+                    {estimate.orientation.dimensions_mm.z} mm
+                  </strong>
+                </div>
 
-              <div className="result-item">
-                <span>Filament</span>
+                {estimate.pricing.summary.minimum_order_applied && (
+                  <div className="notice-box">Minimum order value applied.</div>
+                )}
 
-                <strong>{estimate.slicing.filament_g} g</strong>
-              </div>
+                <p className="estimate-note">
+                  This is an automatic estimate. Final production may require
+                  technical review depending on geometry and printability.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="result-header">
+                  <div>
+                    <span className="eyebrow">PROJECT REVIEW</span>
 
-              <div className="result-item">
-                <span>Layers</span>
+                    <h2>
+                      {estimate.status === "technical_review_required"
+                        ? "Technical review required"
+                        : "Model exceeds available build volume"}
+                    </h2>
 
-                <strong>{estimate.slicing.layers}</strong>
-              </div>
-            </div>
+                    <p>{estimate.filename}</p>
+                  </div>
+                </div>
 
-            <div className="dimensions">
-              <span>Print dimensions</span>
+                <div className="notice-box">{estimate.message}</div>
 
-              <strong>
-                {estimate.orientation.dimensions_mm.x} ×{" "}
-                {estimate.orientation.dimensions_mm.y} ×{" "}
-                {estimate.orientation.dimensions_mm.z} mm
-              </strong>
-            </div>
+                <div className="dimensions">
+                  <span>Print dimensions</span>
 
-            {estimate.pricing.summary.minimum_order_applied && (
-              <div className="notice-box">Minimum order value applied.</div>
+                  <strong>
+                    {estimate.orientation.dimensions_mm.x} ×{" "}
+                    {estimate.orientation.dimensions_mm.y} ×{" "}
+                    {estimate.orientation.dimensions_mm.z} mm
+                  </strong>
+                </div>
+
+                {estimate.status === "technical_review_required" && (
+                  <p className="estimate-note">
+                    Compatible machines identified:{" "}
+                    {estimate.machine_selection.compatible_count}. An automatic
+                    price is not available for this configuration. Our team will
+                    need to review the project.
+                  </p>
+                )}
+
+                {estimate.status === "model_exceeds_build_volume" && (
+                  <p className="estimate-note">
+                    Try changing the model orientation or contact our team to
+                    discuss alternative production options.
+                  </p>
+                )}
+              </>
             )}
-
-            <p className="estimate-note">
-              This is an automatic estimate. Final production may require
-              technical review depending on geometry and printability.
-            </p>
           </section>
         )}
       </main>

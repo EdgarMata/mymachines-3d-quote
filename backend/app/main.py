@@ -6,6 +6,7 @@ import trimesh
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.orientation import orient_stl
+from app.services.machine_selector import select_machine
 from app.services.pricing import calculate_pricing
 from app.services.slicer import slice_stl
 from app.services.printing_config import (
@@ -91,14 +92,16 @@ def get_options():
 
     machines = {}
 
-    for machine_name, machine_data in config[
-        "machines"
-    ].items():
+    for machine_name, machine_data in config["machines"].items():
         machines[machine_name] = {
             "label": machine_data["label"],
-            "nozzle_diameter_mm": machine_data[
-                "nozzle_diameter_mm"
-            ],
+            "nozzle_diameter_mm": machine_data["nozzle_diameter_mm"],
+            "build_volume_mm": {
+                "x": machine_data["build_volume_mm"]["x"],
+                "y": machine_data["build_volume_mm"]["y"],
+                "z": machine_data["build_volume_mm"]["z"],
+            },
+            "quoting_enabled": machine_data["quoting_enabled"],
         }
 
     return {
@@ -403,7 +406,48 @@ async def estimate_model(
                 z=rotation_z,
             )
 
-            # Slice the oriented model
+            # ---------------------------------------------
+            # Machine selection
+            # ---------------------------------------------
+
+            machine_selection = select_machine(
+                orientation_result["dimensions_mm"]
+            )
+
+            # No machine is currently eligible for
+            # an automatic quotation.
+            if machine_selection["status"] != "ready":
+                if machine_selection["status"] == "technical_review_required":
+                    message = (
+                        "This model fits one or more machines, "
+                        "but requires a technical review before "
+                        "an automatic quote can be provided."
+                    )
+                else:
+                    message = (
+                        "The model exceeds the build volume "
+                        "of all configured machines in its "
+                        "current orientation."
+                    )
+
+                return {
+                    "filename": filename,
+                    "quantity": quantity,
+                    "material": material,
+                    "quality": quality,
+                    "status": machine_selection["status"],
+                    "message": message,
+                    "geometry": geometry,
+                    "orientation": orientation_result,
+                    "machine_selection": machine_selection,
+                    "slicing": None,
+                    "pricing": None,
+                }
+
+            # ---------------------------------------------
+            # Slicing
+            # ---------------------------------------------
+
             slicing = slice_stl(
                 oriented_stl,
                 material=material,
@@ -451,6 +495,8 @@ async def estimate_model(
         "geometry": geometry,
 
         "orientation": orientation_result,
+
+        "machine_selection": machine_selection,
 
         "slicing": slicing,
 
