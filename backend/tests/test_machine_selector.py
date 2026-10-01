@@ -168,7 +168,7 @@ class TestMachineSelector(unittest.TestCase):
 
         self.assertAlmostEqual(
             result["summary"]["selling_price_eur"],
-            11.34,
+            10.61,
             places=2,
         )
 

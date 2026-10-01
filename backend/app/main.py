@@ -612,6 +612,17 @@ async def estimate_model(
             config=machine_pricing_config,
         )
 
+        public_pricing = {
+            "machine": pricing["machine"],
+            "quantity": pricing["quantity"],
+            "selling_price_eur": (
+                pricing["summary"]["selling_price_eur"]
+            ),
+            "minimum_order_applied": (
+                pricing["summary"]["minimum_order_applied"]
+            ),
+        }
+
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -637,5 +648,5 @@ async def estimate_model(
 
         "slicing": slicing,
 
-        "pricing": pricing,
+        "pricing": public_pricing,
 }

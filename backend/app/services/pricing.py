@@ -229,14 +229,24 @@ def calculate_pricing(
         * config.labour_cost_per_hour_eur
     )
 
-    # Direct production cost
-    production_cost = (
+    # Costs exposed to print failure
+    failure_exposed_cost = (
         total_material_cost
         + depreciation_cost
         + maintenance_cost
         + electricity_cost
-        + setup_cost
+    )
+
+    # Labour not repeated automatically on print failure
+    fixed_labour_cost = (
+        setup_cost
         + postprocess_cost
+    )
+
+    # Direct production cost
+    production_cost = (
+        failure_exposed_cost
+        + fixed_labour_cost
     )
 
     # Failure / risk
@@ -249,14 +259,19 @@ def calculate_pricing(
             "Failure rate must be lower than 100%."
         )
 
-    expected_cost = (
-        production_cost
+    expected_failure_exposed_cost = (
+        failure_exposed_cost
         / (1 - failure_rate)
     )
 
     risk_cost = (
-        expected_cost
-        - production_cost
+        expected_failure_exposed_cost
+        - failure_exposed_cost
+    )
+
+    expected_cost = (
+        expected_failure_exposed_cost
+        + fixed_labour_cost
     )
 
     # Margin
@@ -327,6 +342,17 @@ def calculate_pricing(
             ),
             "risk_eur": round(
                 risk_cost,
+                2,
+            ),
+        },
+
+        "internal": {
+            "failure_exposed_cost_eur": round(
+                failure_exposed_cost,
+                2,
+            ),
+            "fixed_labour_cost_eur": round(
+                fixed_labour_cost,
                 2,
             ),
         },

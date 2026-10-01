@@ -123,6 +123,27 @@ class TestEstimateEndpoint(unittest.TestCase):
             "MyCloner",
         )
 
+        self.assertNotIn(
+            "costs",
+            result["pricing"],
+        )
+
+        self.assertNotIn(
+            "rates",
+            result["pricing"],
+        )
+
+        self.assertNotIn(
+            "internal",
+            result["pricing"],
+        )
+
+        self.assertNotIn(
+            "summary",
+            result["pricing"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
+    
