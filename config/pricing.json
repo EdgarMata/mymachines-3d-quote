@@ -1,23 +1,12 @@
 {
   "currency": "EUR",
 
-  "machine": {
-    "name": "Prusa MK3S",
-    "purchase_cost_eur": 900.0,
-    "residual_value_eur": 100.0,
-    "lifetime_hours": 6000,
-    "maintenance_cost_per_hour_eur": 0.25,
-    "average_power_kw": 0.08
-  },
-
   "energy": {
     "electricity_cost_per_kwh_eur": 0.25
   },
 
   "labour": {
-    "cost_per_hour_eur": 20.0,
-    "setup_minutes": 10,
-    "postprocess_minutes_per_piece": 5
+    "cost_per_hour_eur": 20.0
   },
 
   "risk": {
