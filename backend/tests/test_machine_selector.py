@@ -171,7 +171,84 @@ class TestMachineSelector(unittest.TestCase):
             10.61,
             places=2,
         )
+    
+    def test_failure_exposed_cost_excludes_labour(self):
+        config = load_pricing_config(
+            machine_id="prusa_mk3s_04"
+        )
 
+        filament_cost_eur = 0.38
+        print_time_seconds = 7830
+        quantity = 1
+
+        result = calculate_pricing(
+            filament_cost_eur=filament_cost_eur,
+            print_time_seconds=print_time_seconds,
+            quantity=quantity,
+            config=config,
+        )
+
+        total_print_hours = (
+            print_time_seconds / 3600
+        ) * quantity
+
+        depreciable_value = (
+            config.machine_purchase_cost_eur
+            - config.machine_residual_value_eur
+        )
+
+        depreciation_cost = (
+            depreciable_value
+            / config.machine_lifetime_hours
+            * total_print_hours
+        )
+
+        maintenance_cost = (
+            config.maintenance_cost_per_hour_eur
+            * total_print_hours
+        )
+
+        electricity_cost = (
+            config.average_power_kw
+            * config.electricity_cost_per_kwh_eur
+            * total_print_hours
+        )
+
+        expected_failure_exposed_cost = (
+            filament_cost_eur * quantity
+            + depreciation_cost
+            + maintenance_cost
+            + electricity_cost
+        )
+
+        self.assertAlmostEqual(
+            result["internal"]["failure_exposed_cost_eur"],
+            expected_failure_exposed_cost,
+            places=2,
+        )
+
+    def test_fixed_labour_contains_setup_and_postprocess_only(self):
+        config = load_pricing_config(
+            machine_id="prusa_mk3s_04"
+        )
+
+        result = calculate_pricing(
+            filament_cost_eur=0.38,
+            print_time_seconds=7830,
+            quantity=1,
+            config=config,
+        )
+
+        expected_fixed_labour_cost = (
+            result["costs"]["setup_labour_eur"]
+            + result["costs"]["postprocess_labour_eur"]
+        )
+
+        self.assertAlmostEqual(
+            result["internal"]["fixed_labour_cost_eur"],
+            expected_fixed_labour_cost,
+            places=2,
+        )
 
 if __name__ == "__main__":
     unittest.main()
