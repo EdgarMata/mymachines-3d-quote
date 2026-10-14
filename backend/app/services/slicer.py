@@ -1,5 +1,7 @@
 
 import re
+import os
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path
@@ -9,22 +11,47 @@ from app.services.printing_config import (
 )
 
 
-PROJECT_ROOT = Path.home() / "Projetos" / "mymachines-3d-quote"
+DEFAULT_PROJECT_ROOT = (
+    Path.home()
+    / "Projetos"
+    / "mymachines-3d-quote"
+)
+
+PROJECT_ROOT = Path(
+    os.getenv(
+        "MYMACHINES_PROJECT_ROOT",
+        str(DEFAULT_PROJECT_ROOT),
+    )
+)
 
 ORCA_APP_ID = "com.orcaslicer.OrcaSlicer"
 
-ORCA_PROCESS_PROFILE = (
+ORCA_COMMAND = shlex.split(
+    os.getenv(
+        "ORCA_COMMAND",
+        (
+            "flatpak-spawn --host flatpak run "
+            f"{ORCA_APP_ID}"
+        ),
+    )
+)
+
+DEFAULT_PRUSA_PRINTER_PROFILE = (
     Path.home()
-    / ".var/app/com.orcaslicer.OrcaSlicer/config/OrcaSlicer/system/Prusa/process"
-    / "0.20mm Standard @MK3S 0.4.json"
+    / ".var/app/com.orcaslicer.OrcaSlicer/config/OrcaSlicer/system/Prusa/machine"
+    / "Prusa MK3S 0.4 nozzle.json"
+)
+
+PRUSA_PRINTER_PROFILE = Path(
+    os.getenv(
+        "ORCA_PRUSA_PRINTER_PROFILE",
+        str(DEFAULT_PRUSA_PRINTER_PROFILE),
+    )
 )
 
 ORCA_PRINTER_PROFILES = {
-    "prusa_mk3s_04": (
-        Path.home()
-        / ".var/app/com.orcaslicer.OrcaSlicer/config/OrcaSlicer/system/Prusa/machine"
-        / "Prusa MK3S 0.4 nozzle.json"
-    ),
+    "prusa_mk3s_04": PRUSA_PRINTER_PROFILE,
+    
     "my_cloner_04": (
         PROJECT_ROOT
         / "profiles/printers/my_cloner_04.json"
@@ -180,9 +207,7 @@ def slice_stl(
         output_dir = Path(tmp_dir)
 
         command = [
-            "flatpak",
-            "run",
-            ORCA_APP_ID,
+            *ORCA_COMMAND,
 
             "--load-settings",
             (

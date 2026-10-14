@@ -1,4 +1,5 @@
 import io
+import os
 import tempfile
 from pathlib import Path
 
@@ -18,6 +19,19 @@ from app.services.printing_config import (
 app = FastAPI(
     title="MyMachines 3D Quote API",
     version="0.3.0",
+)
+
+DEFAULT_PROJECT_ROOT = (
+    Path.home()
+    / "Projetos"
+    / "mymachines-3d-quote"
+)
+
+PROJECT_ROOT = Path(
+    os.getenv(
+        "MYMACHINES_PROJECT_ROOT",
+        str(DEFAULT_PROJECT_ROOT),
+    )
 )
 
 app.add_middleware(
@@ -202,11 +216,7 @@ async def slice_model(file: UploadFile = File(...)):
         )
 
     try:
-        project_root = (
-            Path.home()
-            / "Projetos"
-            / "mymachines-3d-quote"
-        )
+        project_root = PROJECT_ROOT
 
         temp_root = (
             project_root
@@ -270,11 +280,7 @@ async def analyze_model(
             detail="The uploaded file is empty.",
         )
 
-    project_root = (
-        Path.home()
-        / "Projetos"
-        / "mymachines-3d-quote"
-    )
+    project_root = PROJECT_ROOT
 
     temp_root = project_root / "tmp" / "analysis"
 
@@ -482,11 +488,7 @@ async def estimate_model(
     # ---------------------------------------------
 
     try:
-        project_root = (
-            Path.home()
-            / "Projetos"
-            / "mymachines-3d-quote"
-        )
+        project_root = PROJECT_ROOT
 
         temp_root = (
             project_root

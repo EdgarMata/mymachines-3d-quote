@@ -1,12 +1,20 @@
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 
-PROJECT_ROOT = (
+DEFAULT_PROJECT_ROOT = (
     Path.home()
     / "Projetos"
     / "mymachines-3d-quote"
+)
+
+PROJECT_ROOT = Path(
+    os.getenv(
+        "MYMACHINES_PROJECT_ROOT",
+        str(DEFAULT_PROJECT_ROOT),
+    )
 )
 
 PRICING_CONFIG_FILE = (
