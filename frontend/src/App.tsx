@@ -102,28 +102,10 @@ type SuccessfulEstimate = EstimateBase & {
   };
 
   pricing: {
-    production: {
-      print_hours_each: number;
-      total_print_hours: number;
-    };
-
-    costs: {
-      material_eur: number;
-      machine_depreciation_eur: number;
-      maintenance_eur: number;
-      electricity_eur: number;
-      setup_labour_eur: number;
-      postprocess_labour_eur: number;
-      risk_eur: number;
-    };
-
-    summary: {
-      production_cost_eur: number;
-      expected_cost_eur: number;
-      selling_price_before_minimum_eur: number;
-      minimum_order_applied: boolean;
-      selling_price_eur: number;
-    };
+    machine: string;
+    quantity: number;
+    selling_price_eur: number;
+    minimum_order_applied: boolean;
   };
 };
 
@@ -561,7 +543,7 @@ function App() {
                     <span>Estimated price</span>
 
                     <strong>
-                      €{estimate.pricing.summary.selling_price_eur.toFixed(2)}
+                      €{estimate.pricing.selling_price_eur.toFixed(2)}
                     </strong>
 
                     <small>Excl. VAT</small>
@@ -613,7 +595,7 @@ function App() {
                   </strong>
                 </div>
 
-                {estimate.pricing.summary.minimum_order_applied && (
+                {estimate.pricing.minimum_order_applied && (
                   <div className="notice-box">Minimum order value applied.</div>
                 )}
 

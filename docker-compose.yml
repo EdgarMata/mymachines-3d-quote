@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+
+    container_name: mymachines-3d-quote-backend
+
+    environment:
+      MYMACHINES_PROJECT_ROOT: /project
+      ORCA_COMMAND: /opt/orca/AppRun
+      ORCA_PRUSA_PRINTER_PROFILE: /project/profiles/printers/prusa_mk3s_0.4.json
+
+    ports:
+      - "8000:8000"
+
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+    container_name: mymachines-3d-quote-frontend
+
+    ports:
+      - "8080:80"
+
+    depends_on:
+      - backend
+
+    restart: unless-stopped
