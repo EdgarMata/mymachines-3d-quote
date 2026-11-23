@@ -188,7 +188,7 @@ function App() {
         setLoadingOptions(true);
         setError(null);
 
-        const response = await fetch("http://127.0.0.1:8000/options");
+        const response = await fetch("/api/options");
 
         if (!response.ok) {
           throw new Error(`Backend returned ${response.status}`);
@@ -241,14 +241,11 @@ function App() {
           rotation_z: orientation.z.toString(),
         });
 
-        const response = await fetch(
-          `http://127.0.0.1:8000/analyze?${params.toString()}`,
-          {
-            method: "POST",
-            body: formData,
-            signal: controller.signal,
-          },
-        );
+        const response = await fetch(`/api/analyze?${params.toString()}`, {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
 
         if (!response.ok) {
           throw new Error(`Model analysis failed (${response.status}).`);
@@ -305,13 +302,10 @@ function App() {
         rotation_z: orientation.z.toString(),
       });
 
-      const response = await fetch(
-        `http://127.0.0.1:8000/estimate?${params.toString()}`,
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
+      const response = await fetch(`/api/estimate?${params.toString()}`, {
+        method: "POST",
+        body: formData,
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
