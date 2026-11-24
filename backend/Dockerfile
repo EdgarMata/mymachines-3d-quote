@@ -1,4 +1,5 @@
 FROM python:3.13-slim
+ARG TARGETARCH
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -7,6 +8,8 @@ RUN apt-get update \
     libwebkit2gtk-4.1-0 \
     libjavascriptcoregtk-4.1-0 \
     libsm6 \
+    curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -17,6 +20,10 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY backend/app /app/app
 
+# Application configuration and slicer profiles
+COPY config /project/config
+COPY profiles /project/profiles
+
 # Project license and third-party notices
 COPY LICENSE /project/LICENSE
 COPY THIRD_PARTY_NOTICES.md /project/THIRD_PARTY_NOTICES.md
@@ -26,16 +33,33 @@ RUN mkdir -p \
     /project/tmp/analysis \
     /project/tmp/slicer
 
-# OrcaSlicer 2.4.2 - official x86_64 AppImage
-ADD --checksum=sha256:d12fb8c8eac1aecd2dfb6377acd48f994f8fa439ed5292fa532dd82880f029fd \
-    https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v2.4.2/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.4.2.AppImage \
-    /tmp/OrcaSlicer.AppImage
+# OrcaSlicer 2.4.2 - architecture-specific official AppImage
+ARG ORCA_VERSION=2.4.2
 
-RUN chmod +x /tmp/OrcaSlicer.AppImage \
-    && cd /opt \
-    && /tmp/OrcaSlicer.AppImage --appimage-extract \
-    && mv /opt/squashfs-root /opt/orca \
-    && rm /tmp/OrcaSlicer.AppImage
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+    amd64) \
+    ORCA_ASSET="OrcaSlicer_Linux_AppImage_Ubuntu2404_V${ORCA_VERSION}.AppImage"; \
+    ORCA_SHA256="d12fb8c8eac1aecd2dfb6377acd48f994f8fa439ed5292fa532dd82880f029fd"; \
+    ;; \
+    arm64) \
+    ORCA_ASSET="OrcaSlicer_Linux_AppImage_Ubuntu2404_aarch64_V${ORCA_VERSION}.AppImage"; \
+    ORCA_SHA256="e1a07275a25f176626c55a5df39e91bc4476d8c28ee4a3192ff758e29dd5c3ba"; \
+    ;; \
+    *) \
+    echo "Unsupported architecture: ${TARGETARCH}"; \
+    exit 1; \
+    ;; \
+    esac; \
+    curl -fL --retry 3 \
+    "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v${ORCA_VERSION}/${ORCA_ASSET}" \
+    -o /tmp/OrcaSlicer.AppImage; \
+    echo "${ORCA_SHA256}  /tmp/OrcaSlicer.AppImage" | sha256sum -c -; \
+    chmod +x /tmp/OrcaSlicer.AppImage; \
+    cd /opt; \
+    /tmp/OrcaSlicer.AppImage --appimage-extract; \
+    mv /opt/squashfs-root /opt/orca; \
+    rm /tmp/OrcaSlicer.AppImage
 
 ENV PYTHONPATH=/app
 ENV MYMACHINES_PROJECT_ROOT=/project
