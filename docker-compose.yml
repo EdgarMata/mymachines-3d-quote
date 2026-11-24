@@ -18,8 +18,8 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
 
     container_name: mymachines-3d-quote-frontend
 

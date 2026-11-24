@@ -32,6 +32,7 @@ COPY profiles /project/profiles
 # Project license and third-party notices
 COPY LICENSE /project/LICENSE
 COPY THIRD_PARTY_NOTICES.md /project/THIRD_PARTY_NOTICES.md
+COPY third_party /project/third_party
 
 RUN mkdir -p \
     /project/tmp/uploads \
