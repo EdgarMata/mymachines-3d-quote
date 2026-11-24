@@ -93,7 +93,7 @@ Internal production costs and pricing calculations remain on the backend. Only t
 Clone the repository and enter the project directory.
 
 ```bash
-git clone https://github.com/YOUR-ACCOUNT/mymachines-3d-quote.git
+git clone https://github.com/EdgarMata/mymachines-3d-quote.git
 cd mymachines-3d-quote
 ```
 
