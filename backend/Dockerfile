@@ -1,5 +1,10 @@
 FROM python:3.13-slim
 ARG TARGETARCH
+LABEL org.opencontainers.image.title="My-Instant 3D Quote Backend" \
+    org.opencontainers.image.description="MyMachines 3D printing quotation backend" \
+    org.opencontainers.image.source="https://github.com/EdgarMata/mymachines-3d-quote" \
+    org.opencontainers.image.licenses="AGPL-3.0-only" \
+    org.opencontainers.image.vendor="MyMachines"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
