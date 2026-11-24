@@ -71,3 +71,5 @@ compose.override.yml
 
 # Build artifacts
 /build/
+# Local test models
+/tests/models/
