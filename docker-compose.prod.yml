@@ -1,0 +1,70 @@
+
+name: mymachines-3d-quote
+
+services:
+  backend:
+    image: ghcr.io/edgarmata/mymachines-3d-quote-backend:${QUOTE_IMAGE_TAG:?Set QUOTE_IMAGE_TAG}
+
+    container_name: mymachines-3d-quote-backend
+
+    restart: unless-stopped
+
+    environment:
+      MYMACHINES_PROJECT_ROOT: /project
+      ORCA_COMMAND: /opt/orca/AppRun
+      ORCA_PRUSA_PRINTER_PROFILE: /project/profiles/printers/prusa_mk3s_0.4.json
+
+    networks:
+      - quote_internal
+
+    cpus: 2.0
+    mem_limit: 4g
+
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - http://localhost:8000/options
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    image: ghcr.io/edgarmata/mymachines-3d-quote-frontend:${QUOTE_IMAGE_TAG:?Set QUOTE_IMAGE_TAG}
+
+    container_name: mymachines-3d-quote-frontend
+
+    restart: unless-stopped
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    networks:
+      - quote_internal
+      - my_machines_network
+
+    cpus: 0.5
+    mem_limit: 256m
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  quote_internal:
+    driver: bridge
+
+  my_machines_network:
+    external: true
