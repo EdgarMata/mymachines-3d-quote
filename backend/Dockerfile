@@ -17,8 +17,9 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY backend/app /app/app
 
-COPY config /project/config
-COPY profiles /project/profiles
+# Project license and third-party notices
+COPY LICENSE /project/LICENSE
+COPY THIRD_PARTY_NOTICES.md /project/THIRD_PARTY_NOTICES.md
 
 RUN mkdir -p \
     /project/tmp/uploads \
