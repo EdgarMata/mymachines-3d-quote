@@ -3,27 +3,71 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Node
+# Node.js
 node_modules/
 dist/
+dist-ssr/
 .vite/
+*.tsbuildinfo
+npm-debug.log*
+
+# Environment variables and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Private production configuration
+config/*.local.json
+config/*.private.json
+config/private/
+
+# Temporary application data
+uploads/
+tmp/
+
+# Generated slicing output
+*.gcode
+*.gco
+*.bgcode
+result.json
+/tests/output*/
+
+# Logs
+*.log
+logs/
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# OS
+# Operating systems
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-
-# Uploads / temporary 3D files
-uploads/
-tmp/
-
 # Docker local data
 postgres_data/
+
+# Docker local overrides
+docker-compose.override.yml
+compose.override.yml
+
+# Local databases
+*.sqlite
+*.sqlite3
+*.db
+
+# Build artifacts
+/build/
