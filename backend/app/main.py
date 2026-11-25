@@ -1,6 +1,7 @@
 import os
 import tempfile
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,7 @@ from app.services.upload_validation import (
     validate_stl_upload,
 )
 from app.services.processing import ProcessingAdmissionMiddleware, run_processing
+from app.services.temp_storage import cleanup_lifecycle, workspace
 from app.services.slicer_process import SlicerTimeoutError
 from app.services.orientation import orient_mesh
 from app.services.geometry_validation import load_validated_stl, geometry_summary
@@ -27,9 +29,17 @@ from app.services.printing_config import (
     load_printing_config,
 )
 
+
+@asynccontextmanager
+async def lifespan(app):
+    async with cleanup_lifecycle(PROJECT_ROOT):
+        yield
+
+
 app = FastAPI(
     title="MyMachines 3D Quote API",
     version="0.3.0",
+    lifespan=lifespan,
 )
 
 
@@ -191,22 +201,7 @@ def _slice_model(filename, contents):
     load_validated_stl(contents)
 
     try:
-        project_root = PROJECT_ROOT
-
-        temp_root = (
-            project_root
-            / "tmp"
-            / "uploads"
-        )
-
-        temp_root.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
-        with tempfile.TemporaryDirectory(
-            dir=temp_root
-        ) as tmp_dir:
+        with workspace(PROJECT_ROOT, "uploads", directory_factory=tempfile.TemporaryDirectory) as tmp_dir:
             tmp_path = Path(tmp_dir)
 
             stl_path = tmp_path / "original.stl"
@@ -248,13 +243,8 @@ async def analyze_model(
 def _analyze_model(filename, contents, rotation_x, rotation_y, rotation_z):
     mesh = load_validated_stl(contents)
 
-    project_root = PROJECT_ROOT
-
-    temp_root = project_root / "tmp" / "analysis"
-
     try:
-        temp_root.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=temp_root) as tmp_dir:
+        with workspace(PROJECT_ROOT, "analysis", directory_factory=tempfile.TemporaryDirectory) as tmp_dir:
             tmp_path = Path(tmp_dir)
 
             oriented_stl = tmp_path / "oriented.stl"
@@ -356,22 +346,7 @@ def _estimate_model(filename, contents, quantity, material, quality, rotation_x,
     # ---------------------------------------------
 
     try:
-        project_root = PROJECT_ROOT
-
-        temp_root = (
-            project_root
-            / "tmp"
-            / "uploads"
-        )
-
-        temp_root.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
-        with tempfile.TemporaryDirectory(
-            dir=temp_root
-        ) as tmp_dir:
+        with workspace(PROJECT_ROOT, "uploads", directory_factory=tempfile.TemporaryDirectory) as tmp_dir:
             tmp_path = Path(tmp_dir)
 
             # Prepare oriented STL

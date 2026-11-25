@@ -8,6 +8,7 @@ import subprocess
 import time
 
 from app.services.input_validation import positive_integer_setting
+from app.services.temp_storage import active_workspace_fds
 
 SLICER_TIMEOUT_SECONDS = positive_integer_setting("SLICER_TIMEOUT_SECONDS", 60)
 # Internal diagnostics only: keep the last 1 MiB per stream, draining the rest.
@@ -92,11 +93,11 @@ def _capture_output(process: subprocess.Popen) -> tuple[str, str]:
     )
 
 
-def run_slicer_process(command) -> subprocess.CompletedProcess:
+def run_slicer_process(command, *, cwd=None, env=None) -> subprocess.CompletedProcess:
     _enable_child_subreaper()
     with subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        start_new_session=True,
+        start_new_session=True, cwd=cwd, env=env, pass_fds=active_workspace_fds(),
     ) as process:
         try:
             stdout, stderr = _capture_output(process)

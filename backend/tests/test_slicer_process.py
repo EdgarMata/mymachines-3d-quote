@@ -162,6 +162,9 @@ class TestSlicerTimeoutEndpoints(unittest.IsolatedAsyncioTestCase):
             "import os,sys,time; from pathlib import Path; "
             "output=Path(sys.argv[sys.argv.index('--outputdir')+1]); "
             "(output/'partial.gcode').write_text('; incomplete'); "
+            "(output/'partial.json').write_text('{}'); "
+            "(Path(os.environ['HOME'])/'synthetic.log').write_text('synthetic'); "
+            "(Path(os.environ['TMPDIR'])/'synthetic.tmp').write_text('synthetic'); "
             f"Path({str(self.root / 'pid')!r}).write_text(str(os.getpid())); time.sleep(30)"
         )
         for name, value in (
@@ -182,6 +185,9 @@ class TestSlicerTimeoutEndpoints(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any((self.root / "tmp").rglob("*.gcode")))
         self.assertFalse(any(path.is_dir() and path.name.startswith("tmp")
                              for path in (self.root / "tmp").rglob("*")))
+        for bucket in ("uploads", "analysis", "slicer"):
+            root = self.root / "tmp" / bucket
+            self.assertFalse(root.exists() and any(root.iterdir()))
 
     async def test_timeout_504_cleanup_and_next_request(self):
         for path in ("/slice", "/estimate"):

@@ -52,8 +52,8 @@ request buffering. If changing the backend file limit, align this Nginx value
 with the file limit plus 1 MiB, then rebuild the frontend image. Align any outer
 reverse proxy limits before an approved deployment. Nginx rejections may use an
 HTML response; clients must handle HTTP 413 without assuming JSON. These limits
-apply per request; concurrency and temporary-storage policy are separate pending
-gates. Local source-mounted verification does not update built or deployed images.
+apply per request; concurrency and temporary-storage controls are described below.
+Local source-mounted verification does not update built or deployed images.
 
 ## Geometry and printing parameter limits (MM-002)
 
@@ -114,7 +114,8 @@ Slicer timeouts receive 504 after process cleanup. There is no application queue
 and no automatic retry loop. Backend admission happens before multipart parsing;
 Nginx request buffering still consumes proxy resources before forwarding uploads.
 Slow accepted uploads can occupy admission before geometry starts. Existing byte
-limits remain necessary, and rate limits/storage policy are separate gates.
+limits remain necessary; rate limiting remains pending and MM-004 adds the
+temporary-storage policy below.
 
 MM-003 verification (source-mounted Docker backend command above) includes actual
 short synthetic subprocess trees and real OrcaSlicer binary/ASCII quotes. UI error
@@ -151,3 +152,43 @@ Pending operational validation: slow-upload/abuse protection, a hard overall
 geometry deadline, process-local admission (one Uvicorn worker/replica), and
 representative load tests on the shared ARM64 deployment host. No VPS load test
 or deployment is implied by local test results.
+
+## Temporary storage (MM-004)
+
+| Backend environment variable | Default | Constraint |
+|---|---:|---|
+| `TEMP_FILE_RETENTION_SECONDS` | `3600` | Positive integer; minimum age for recognized unlocked orphan workspaces |
+| `TEMP_CLEANUP_INTERVAL_SECONDS` | `300` | Positive integer; periodic sweep interval in seconds |
+
+Invalid settings prevent startup. Set overrides explicitly in the backend
+container environment and recreate only during an approved deployment. Source
+mounts used by local tests do not update built/running images. Roots under
+`MYMACHINES_PROJECT_ROOT/tmp/{uploads,analysis,slicer}` must be application-owned,
+accessible and free of symlink redirections; the configured project root must
+exist. No Compose volume, tmpfs, CPU/memory or init-setting changes are needed.
+
+Normal requests remove files immediately after actual worker/process completion.
+The one-hour setting only controls eligibility of recognized abandoned directories;
+startup or the next periodic sweep removes them when unlocked and accessible.
+Permissions, stopped containers and active children can delay removal. Changing
+this setting does not change upload bytes, concurrency, slicer/proxy timeouts or
+provide a hard disk quota. Monitor writable-layer and proxy buffering consumption
+during an approved deployment/load test.
+
+The same container keeps named files across restart, allowing recovery. A newly
+recreated container does not inherit its predecessor's writable-layer files; old
+stopped containers/layers need the operator's normal lifecycle management. No
+persistent temporary volume exists in either current Compose file. Do not add
+one or run generic `/tmp` deletion as part of deploying this change.
+
+Slicer `cwd`, home/XDG and temporary environment paths are isolated inside its
+workspace; immutable profiles stay outside. `client_body_in_file_only off` is
+explicit in Nginx, preserving automatic disposal of upload body files. Backend
+recovery does not touch `/var/cache/nginx` or OS multipart temporary files.
+
+Before an approved rollout, review any legacy/unrecognized application temporary
+directories separately; the janitor deliberately cannot establish ownership of
+those files. See [Temporary storage](TEMPORARY_STORAGE.md) for the inventory,
+lock/recovery protocol, privacy policy, small metadata-creation crash window and
+limitations. Deleting files does not imply physical secure erasure. Native ARM64
+CI and representative deployment resource tests remain separate verification.

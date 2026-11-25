@@ -142,6 +142,10 @@ These process-local protections require a single Uvicorn worker. Open/non-watert
 are accepted, but may still need repair or technical review. See
 [Architecture](docs/ARCHITECTURE.md) for the acceptance policy and
 [Deployment](docs/DEPLOYMENT.md) for environment settings and proxy limits.
+Normal request cleanup runs immediately after processing; recognized abandoned
+directories become eligible for recovery after one hour, checked at startup and
+every five minutes. Active locks prevent age-based deletion of running jobs. See
+[Temporary storage](docs/TEMPORARY_STORAGE.md) for ownership, privacy and limits.
 
 ## Project Structure
 

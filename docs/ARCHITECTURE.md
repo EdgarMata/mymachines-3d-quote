@@ -2,7 +2,7 @@
 
 ## Components
 - Frontend: React 19, TypeScript, Vite 8, Three.js / React Three Fiber and Drei. Nginx serves the production bundle and proxies `/api/` to FastAPI, stripping the prefix.
-- Backend: Python 3.13 in Docker, FastAPI, Trimesh, NumPy and OrcaSlicer CLI. Main API module: `backend/app/main.py`. Services: `upload_validation.py`, `geometry_validation.py`, `input_validation.py`, `processing.py`, `slicer_process.py`, `orientation.py`, `machine_selector.py`, `pricing.py`, `printing_config.py`, `slicer.py`.
+- Backend: Python 3.13 in Docker, FastAPI, Trimesh, NumPy and OrcaSlicer CLI. Main API module: `backend/app/main.py`. Services: `upload_validation.py`, `geometry_validation.py`, `input_validation.py`, `processing.py`, `slicer_process.py`, `temp_storage.py`, `orientation.py`, `machine_selector.py`, `pricing.py`, `printing_config.py`, `slicer.py`.
 - Configuration: `config/` and `profiles/`; inspect their actual schemas before edits. Profiles specify printer, process and filament settings.
 - Slicer: official OrcaSlicer 2.4.2 AppImage extracted into `/opt/orca`; `/opt/orca/AppRun` is the CLI entrypoint. Dockerfile selects AMD64/ARM64 assets and verifies pinned SHA-256 checksums.
 - Local Docker Compose uses frontend port 8080 and backend port 8000. Production Compose uses an isolated application network for backend communication and a separate frontend connection to the reverse proxy network. Do not expose the backend directly.
@@ -33,7 +33,7 @@ Materials: PLA, PETG. Quality: Draft 0.30 mm, Standard 0.20 mm, Fine 0.12 mm. De
 The existing pricing module is the authoritative calculation; do not infer or change its formulas from this document. Existing tests cover reference pricing, setup/post-processing labour and failure-exposed costs. Public pricing currently includes machine, quantity, selling price and minimum-order flag. Review the rest of the response for leaks. Commercial pricing must be loaded from private configuration outside the public repository.
 
 ## Security boundary
-The API and slicer process untrusted files. File extension alone is insufficient. TemporaryDirectory handles normal cleanup in several endpoints, but slicer outputs and crash recovery need inspection. Heavy synchronous pipelines run in a bounded thread executor; ASGI admission limits active uploads and work before multipart parsing. Never rely on container CPU/RAM limits alone to prevent denial of service.
+The API and slicer process untrusted files. File extension alone is insufficient. TemporaryDirectory handles normal cleanup; MM-004 adds lock-aware recovery of recognized abandoned workspaces and contains helper output. Heavy synchronous pipelines run in a bounded thread executor; ASGI admission limits active uploads and work before multipart parsing. Never rely on container CPU/RAM limits alone to prevent denial of service.
 
 Upload protection is shared across all four STL endpoints: bounded file reads (50 MiB by default), sanitized display filenames and application-owned temporary filenames. ASGI middleware caps the complete request at the file limit plus 1 MiB before multipart parsing completes, including requests without Content-Length. Nginx caps request bodies at 51 MiB and buffers them before proxying. Geometry complexity is bounded separately by MM-002; MM-003 limits admitted heavy requests.
 
@@ -168,3 +168,28 @@ stopped as a Python thread; G-code file parsing and proxy temporary storage are
 not globally bounded by this change. OS-level uninterruptible I/O can delay process
 reaping. There is no per-IP rate limit, abandoned-directory recovery, distributed
 queue or hard total request deadline in MM-003.
+
+## MM-004 — temporary file lifecycle
+
+`temp_storage.py` shares the existing immediate directory cleanup across analysis,
+uploads and slicing. Versioned random workspaces have sibling ownership/inode
+metadata and exclusive Linux file locks. Startup and periodic recovery only
+remove recognized, old, unlocked directories in those three application roots;
+active jobs are never removed based on age. Input/output locks are inherited by
+the slicer to protect files if the backend exits abruptly while its child lives.
+MM-003 admission, cancellation, group termination and reaping remain unchanged.
+
+Recovery works off the event loop, anchors traversal to no-follow directory
+descriptors and uses symlink-resistant recursive deletion. Slicer working/home,
+XDG and temporary directories live inside its output workspace. Framework-owned
+anonymous multipart files and Nginx's nonpersistent body files retain their own
+cleanup; the backend never sweeps system or proxy temporary directories.
+
+Defaults: orphan eligibility after 3600 seconds, startup sweep and then a sweep
+every 300 seconds. Eligibility is not a deletion deadline and never delays normal
+completed-job cleanup. Unknown legacy folders and incomplete/mismatched ownership
+metadata are preserved for explicit review. No disk quota, secure erasure,
+permanent model storage or new dependency is introduced. See
+[Temporary storage](TEMPORARY_STORAGE.md) for the audit, full protocol, container
+restart/recreation behavior and remaining risks, and
+[Deployment](DEPLOYMENT.md#temporary-storage-mm-004) for settings.

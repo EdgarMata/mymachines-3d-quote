@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 from app.services.input_validation import InputValidationError, validate_printing_options
 from app.services.slicer_process import run_slicer_process
+from app.services.temp_storage import workspace, slicer_environment
 from app.services.printing_config import (
     get_filament_profile,
     get_process_profile,
@@ -227,12 +228,7 @@ def slice_stl(
             f"STL file not found: {stl_path}"
         )
 
-    temp_root = PROJECT_ROOT / "tmp" / "slicer"
-    temp_root.mkdir(parents=True, exist_ok=True)
-
-    with tempfile.TemporaryDirectory(
-        dir=temp_root
-    ) as tmp_dir:
+    with workspace(PROJECT_ROOT, "slicer", directory_factory=tempfile.TemporaryDirectory) as tmp_dir:
         output_dir = Path(tmp_dir)
 
         command = [
@@ -256,7 +252,7 @@ def slice_stl(
             str(stl_path),
         ]
 
-        process = run_slicer_process(command)
+        process = run_slicer_process(command, cwd=output_dir, env=slicer_environment(output_dir))
 
         if process.returncode != 0:
             raise RuntimeError(
