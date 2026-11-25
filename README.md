@@ -86,7 +86,7 @@ Internal production costs and pricing calculations remain on the backend. Only t
 - Docker
 - Docker Compose
 - Git
-- An x86-64 compatible environment
+- An AMD64 (x86-64) or ARM64 environment
 
 ### Installation
 
@@ -167,7 +167,8 @@ mymachines-3d-quote/
 - [x] Lay-on-face orientation
 - [x] Instant quotation interface
 - [x] Docker Compose deployment
-- [ ] Automated CI/CD
+- [x] Automated build/test CI on AMD64 and ARM64
+- [ ] Automated deployment
 - [ ] Production deployment
 - [ ] Improved error handling and resource management
 

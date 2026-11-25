@@ -6,6 +6,10 @@ from pathlib import Path
 import trimesh
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from app.services.upload_validation import (
+    UploadBodyLimitMiddleware,
+    validate_stl_upload,
+)
 from app.services.orientation import orient_stl
 from app.services.machine_selector import select_machine
 from app.services.pricing import calculate_pricing, load_pricing_config
@@ -44,6 +48,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(UploadBodyLimitMiddleware)
 
 MATERIALS = {
     "PLA": {
@@ -137,21 +143,7 @@ def get_options():
 
 @app.post("/upload")
 async def upload_model(file: UploadFile = File(...)):
-    filename = file.filename or ""
-
-    if not filename.lower().endswith(".stl"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only STL files are supported at this stage.",
-        )
-
-    contents = await file.read()
-
-    if not contents:
-        raise HTTPException(
-            status_code=400,
-            detail="The uploaded file is empty.",
-        )
+    filename, contents = await validate_stl_upload(file)
 
     try:
         mesh = trimesh.load(
@@ -199,21 +191,7 @@ async def upload_model(file: UploadFile = File(...)):
 
 @app.post("/slice")
 async def slice_model(file: UploadFile = File(...)):
-    filename = file.filename or ""
-
-    if not filename.lower().endswith(".stl"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only STL files are supported at this stage.",
-        )
-
-    contents = await file.read()
-
-    if not contents:
-        raise HTTPException(
-            status_code=400,
-            detail="The uploaded file is empty.",
-        )
+    filename, contents = await validate_stl_upload(file)
 
     try:
         project_root = PROJECT_ROOT
@@ -234,7 +212,7 @@ async def slice_model(file: UploadFile = File(...)):
         ) as tmp_dir:
             tmp_path = Path(tmp_dir)
 
-            stl_path = tmp_path / filename
+            stl_path = tmp_path / "original.stl"
             stl_path.write_bytes(contents)
 
             result = slice_stl(stl_path)
@@ -264,21 +242,7 @@ async def analyze_model(
     This endpoint does not perform slicing or calculate pricing.
     """
 
-    filename = file.filename or ""
-
-    if not filename.lower().endswith(".stl"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only STL files are supported.",
-        )
-
-    contents = await file.read()
-
-    if not contents:
-        raise HTTPException(
-            status_code=400,
-            detail="The uploaded file is empty.",
-        )
+    filename, contents = await validate_stl_upload(file)
 
     project_root = PROJECT_ROOT
 
@@ -378,13 +342,7 @@ async def estimate_model(
     rotation_y: float = 0,
     rotation_z: float = 0,
 ):
-    filename = file.filename or ""
-
-    if not filename.lower().endswith(".stl"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only STL files are supported at this stage.",
-        )
+    filename, contents = await validate_stl_upload(file)
 
     material = material.upper()
     quality = quality.lower()
@@ -411,14 +369,6 @@ async def estimate_model(
                 f"Available qualities: "
                 f"{', '.join(available_qualities)}."
             ),
-        )
-
-    contents = await file.read()
-
-    if not contents:
-        raise HTTPException(
-            status_code=400,
-            detail="The uploaded file is empty.",
         )
 
     # ---------------------------------------------
