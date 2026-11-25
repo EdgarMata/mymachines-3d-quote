@@ -3,6 +3,7 @@ name: mymachines-3d-quote
 
 services:
   backend:
+    init: true
     image: ghcr.io/edgarmata/mymachines-3d-quote-backend:${QUOTE_IMAGE_TAG:?Set QUOTE_IMAGE_TAG}
 
     container_name: mymachines-3d-quote-backend

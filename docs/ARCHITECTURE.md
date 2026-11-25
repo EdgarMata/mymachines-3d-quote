@@ -2,7 +2,7 @@
 
 ## Components
 - Frontend: React 19, TypeScript, Vite 8, Three.js / React Three Fiber and Drei. Nginx serves the production bundle and proxies `/api/` to FastAPI, stripping the prefix.
-- Backend: Python 3.13 in Docker, FastAPI, Trimesh, NumPy and OrcaSlicer CLI. Main API module: `backend/app/main.py`. Services: `upload_validation.py`, `geometry_validation.py`, `input_validation.py`, `orientation.py`, `machine_selector.py`, `pricing.py`, `printing_config.py`, `slicer.py`.
+- Backend: Python 3.13 in Docker, FastAPI, Trimesh, NumPy and OrcaSlicer CLI. Main API module: `backend/app/main.py`. Services: `upload_validation.py`, `geometry_validation.py`, `input_validation.py`, `processing.py`, `slicer_process.py`, `orientation.py`, `machine_selector.py`, `pricing.py`, `printing_config.py`, `slicer.py`.
 - Configuration: `config/` and `profiles/`; inspect their actual schemas before edits. Profiles specify printer, process and filament settings.
 - Slicer: official OrcaSlicer 2.4.2 AppImage extracted into `/opt/orca`; `/opt/orca/AppRun` is the CLI entrypoint. Dockerfile selects AMD64/ARM64 assets and verifies pinned SHA-256 checksums.
 - Local Docker Compose uses frontend port 8080 and backend port 8000. Production Compose uses an isolated application network for backend communication and a separate frontend connection to the reverse proxy network. Do not expose the backend directly.
@@ -33,9 +33,9 @@ Materials: PLA, PETG. Quality: Draft 0.30 mm, Standard 0.20 mm, Fine 0.12 mm. De
 The existing pricing module is the authoritative calculation; do not infer or change its formulas from this document. Existing tests cover reference pricing, setup/post-processing labour and failure-exposed costs. Public pricing currently includes machine, quantity, selling price and minimum-order flag. Review the rest of the response for leaks. Commercial pricing must be loaded from private configuration outside the public repository.
 
 ## Security boundary
-The API and slicer process untrusted files. File extension alone is insufficient. TemporaryDirectory handles normal cleanup in several endpoints, but slicer outputs and crash recovery need inspection. Current async endpoints run synchronous computational work; protect event-loop responsiveness and constrain active work. Never rely on container CPU/RAM limits alone to prevent denial of service.
+The API and slicer process untrusted files. File extension alone is insufficient. TemporaryDirectory handles normal cleanup in several endpoints, but slicer outputs and crash recovery need inspection. Heavy synchronous pipelines run in a bounded thread executor; ASGI admission limits active uploads and work before multipart parsing. Never rely on container CPU/RAM limits alone to prevent denial of service.
 
-Upload protection is shared across all four STL endpoints: bounded file reads (50 MiB by default), sanitized display filenames and application-owned temporary filenames. ASGI middleware caps the complete request at the file limit plus 1 MiB before multipart parsing completes, including requests without Content-Length. Nginx caps request bodies at 51 MiB and buffers them before proxying. Geometry complexity is bounded separately by MM-002; concurrent work remains unbounded.
+Upload protection is shared across all four STL endpoints: bounded file reads (50 MiB by default), sanitized display filenames and application-owned temporary filenames. ASGI middleware caps the complete request at the file limit plus 1 MiB before multipart parsing completes, including requests without Content-Length. Nginx caps request bodies at 51 MiB and buffers them before proxying. Geometry complexity is bounded separately by MM-002; MM-003 limits admitted heavy requests.
 
 ## MM-002 — geometry and printing parameter validation
 
@@ -93,4 +93,78 @@ validation errors use 400. Processing failures use generic 500 messages.
 Each API request loads one mesh; orientation copies it in memory instead of
 loading the STL again. Original geometry summaries retain existing fields and
 rounding. Public orientation responses omit internal output paths. No pricing,
-profile, selection algorithm, dependency, concurrency or timeout changes are made.
+profile, selection algorithm or dependency changes are made by MM-002. MM-003 adds the processing protections below.
+
+## MM-003 — processing admission and slicer timeout
+
+`processing.py` uses an in-memory non-blocking semaphore and one lease per heavy
+HTTP request. Before reading the request body or entering FastAPI's multipart
+parser, POST `/upload`, `/analyze`, `/slice` and `/estimate` acquire admission.
+When all slots are occupied, the API returns JSON HTTP 503 with `Retry-After: 5`
+without calling the request receive function. There is no application waiting
+queue. Trailing-slash variants use the same admission; light endpoints and CORS
+preflight requests do not acquire slots. CORS wraps admission/body-limit errors.
+
+`MAX_CONCURRENT_PROCESSING_JOBS` defaults to 1 and must be a positive integer at
+startup. The executor has the same maximum worker count; each lease submits at
+most one complete synchronous pipeline, including geometry, orientation, slicing,
+statistics and pricing. Async endpoint wrappers retain bounded upload reads and
+cheap numeric checks. Config file reads and CPU/subprocess work run in the worker,
+keeping the event loop free; `/health` and `/options` remain accessible.
+
+The HTTP task awaits a shielded adapter to a `concurrent.futures.Future`. The
+lease tracks the actual concurrent future and request completion separately with
+a thread-safe lock. If the HTTP task is cancelled, its wait may stop immediately,
+but an active thread is not cancelled or abandoned for accounting purposes. The
+lease is released only after both the request and actual worker have finished.
+The worker owns temporary directories and cleanup; no new admitted heavy request
+can overlap a cancelled job that is still running. Late exceptions are observed.
+Cancellation during upload reception before worker submission releases admission
+when the parser/request exits. A disconnected client does not necessarily cause
+an ASGI task cancellation; any already-running work still retains its lease until
+completion. Cancellation is not an immediate thread termination mechanism.
+
+`slicer_process.py` starts OrcaSlicer with `Popen(start_new_session=True)` and
+applies a monotonic `SLICER_TIMEOUT_SECONDS` deadline (default 60, positive integer)
+to execution, both output pipes and parent completion. A selector drains stdout
+and stderr together in 64 KiB reads, retaining only the last 1 MiB per stream.
+Excess diagnostics are discarded with a truncation marker; captured memory does
+not grow with emitted output. Closed pipes do not disable the process deadline.
+Parent exit is observed using `waitid(..., WNOWAIT)` until group termination, so
+the leader PID cannot be reused before signaling its group.
+On timeout it kills the process group with SIGKILL, waits for the direct process,
+and reaps adopted descendants in that group before returning a typed timeout.
+The Linux child-subreaper setting (`prctl(PR_SET_CHILD_SUBREAPER)`, via standard
+library ctypes) lets the backend reap orphaned grandchildren, without relying on
+PID 1 to do it. Subreaper registration is process-wide; other application
+components must still manage their own children/orphaned descendants. Targeted `waitpid(-pgid, ...)` does not collect other jobs' children.
+The same cleanup runs on exceptions and removes descendants left by an early
+parent exit. Pipes are closed even on read failures. This requires the Linux
+AMD64/ARM64 container runtime and direct local OrcaSlicer CLI, not a host-delegating
+Flatpak wrapper. Descendants that deliberately escape the process group are not
+an isolation guarantee of this mechanism; this is not a general process sandbox.
+
+The public timeout response is HTTP 504 with an application-defined English
+message, without commands, paths or raw exceptions. Existing directory context
+managers run only after process termination/reaping. A cancelled request may keep
+running until its thread returns or the slicer hits its deadline. A slow geometry
+operation, upload or statistics parse does not acquire a new global deadline:
+60 seconds bounds the slicer subprocess phase, not the whole HTTP request.
+
+The Docker command explicitly uses one Uvicorn worker. The semaphore is not
+shared across workers, replicas or independent backend processes; increasing any
+of those multiplies total concurrency. Compose enables the Docker init process
+as a further safeguard and preserves existing production CPU/RAM limits.
+
+Nginx `proxy_read_timeout 90s` leaves margin above the default slicer deadline for
+cleanup/other work; it is an upstream inactivity timeout, not a global request
+limit. Nginx still buffers uploads, so pre-parser backend admission does not avoid
+proxy-side buffering. Proxy aborts do not release an active worker early. The
+frontend explicitly explains 503 and 504, including HTML proxy responses, and
+does not introduce automatic retries. Repeated requests remain subject to admission.
+
+Remaining limits: geometry is bounded by bytes/triangles but cannot be forcibly
+stopped as a Python thread; G-code file parsing and proxy temporary storage are
+not globally bounded by this change. OS-level uninterruptible I/O can delay process
+reaping. There is no per-IP rate limit, abandoned-directory recovery, distributed
+queue or hard total request deadline in MM-003.

@@ -47,6 +47,12 @@ jobs:
       - name: Build Docker images
         run: docker compose build
 
+      - name: Run frontend error handling tests
+        run: |
+          docker run --rm \
+            -v "${PWD}/frontend:/app:ro" \
+            -w /app node:24-alpine npm test
+
       - name: Generate backend SBOM
         uses: anchore/sbom-action@v0
         with:

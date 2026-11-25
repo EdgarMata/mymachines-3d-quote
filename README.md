@@ -136,7 +136,9 @@ The included cost parameters are illustrative and should be adapted to each busi
 
 Backend safety limits default to 50 MiB per STL, 1,000,000 input triangles and
 1–100 units per automatic estimate. STL geometry and printing parameters are
-validated before slicing. Open/non-watertight models with usable finite surface
+validated before slicing. Heavy endpoints admit one request at a time by default,
+returning 503 / Retry-After 5 when busy; OrcaSlicer has a 60-second deadline.
+These process-local protections require a single Uvicorn worker. Open/non-watertight models with usable finite surface
 are accepted, but may still need repair or technical review. See
 [Architecture](docs/ARCHITECTURE.md) for the acceptance policy and
 [Deployment](docs/DEPLOYMENT.md) for environment settings and proxy limits.

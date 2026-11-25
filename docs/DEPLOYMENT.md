@@ -69,8 +69,8 @@ the protection. Set them explicitly in the backend container environment when
 overriding defaults, then recreate the backend only during an approved deployment.
 No Nginx change is needed for these two settings. The independent MM-001 defaults
 remain 50 MiB per STL and 51 MiB per HTTP request. Increasing the byte or triangle
-limits increases resource exposure; no concurrency or execution-time guarantee is
-provided yet. ASCII structural preflight permits lines up to 4096 bytes.
+limits increases resource exposure; these byte/geometry limits alone provide no concurrency or execution-time guarantee
+(the MM-003 controls are described below). ASCII structural preflight permits lines up to 4096 bytes.
 
 Local verification with the existing Docker image and current source/test mounts:
 
@@ -84,3 +84,70 @@ docker compose run --rm --no-deps \
 This runs real OrcaSlicer integration tests as well as synthetic validation tests;
 it does not update a running service or image. ARM64 validation remains the native
 CI/deployment check, not an assertion derived from a local AMD64 test run.
+
+## Processing admission and slicer timeout (MM-003)
+
+| Backend environment variable | Default | Constraint |
+|---|---:|---|
+| `MAX_CONCURRENT_PROCESSING_JOBS` | `1` | Positive integer; shared by all four heavy endpoints in one backend process |
+| `SLICER_TIMEOUT_SECONDS` | `60` | Positive integer; OrcaSlicer process/pipe communication deadline |
+
+Invalid values prevent application import/startup. Set overrides in the backend
+container environment. Keep one Uvicorn worker (explicit in the Dockerfile), and
+one replica: this in-memory gate is not a host-wide or distributed limit. Do not
+raise concurrency on shared infrastructure without a separate resource assessment.
+The existing production 2 CPU / 4 GiB backend limits are unchanged. Both Compose
+files enable `init: true`; the service itself also adopts/reaps slicer descendants
+using Linux child-subreaper support. No extra Python package is required.
+
+`frontend/nginx.conf` sets `proxy_read_timeout 90s`, compared with the default
+60-second slicer timeout. Increase the proxy allowance coherently if changing the
+slicer deadline; allow for upload, geometry and cleanup as well. Rebuild/recreate
+only during an approved deployment. An outer reverse proxy must also allow this
+interval. The 90-second value is an inactivity timeout, not a total HTTP deadline.
+A request that spends a long time in geometry may outlive a proxy connection;
+admission stays occupied until the real worker finishes. No global request timer
+or upload admission deadline is provided in this step.
+
+Busy requests receive 503 and `Retry-After: 5`; retry manually after a short wait.
+Slicer timeouts receive 504 after process cleanup. There is no application queue
+and no automatic retry loop. Backend admission happens before multipart parsing;
+Nginx request buffering still consumes proxy resources before forwarding uploads.
+Slow accepted uploads can occupy admission before geometry starts. Existing byte
+limits remain necessary, and rate limits/storage policy are separate gates.
+
+MM-003 verification (source-mounted Docker backend command above) includes actual
+short synthetic subprocess trees and real OrcaSlicer binary/ASCII quotes. UI error
+handling can be checked locally with Node 24, without installing test dependencies:
+
+```sh
+cd frontend
+npm test
+npm run build
+npm run lint
+```
+
+The current full lint reports an existing `react-hooks/set-state-in-effect` error
+in the model-analysis effect of `App.tsx`; the same error is reproducible from
+`HEAD` before MM-003. New error-handler/test files pass targeted lint. Build also
+retains Vite's existing large-bundle warning. These are not changes to the pricing
+or viewer flows in MM-003. Native ARM64 CI remains necessary after review; local
+AMD64 tests do not establish ARM64 execution results.
+
+Final MM-003 review bounds stdout and stderr capture to the last 1 MiB per stream,
+using simultaneous nonblocking reads to avoid full-pipe deadlocks. The limit is
+an internal diagnostic-retention budget, not a new model or request limit. G-code
+file parsing/storage remains a separate follow-up. An exited session leader is
+not reaped before group signaling, avoiding a reused-PGID signal race.
+
+GitHub Actions now executes `npm test` in `node:24-alpine` with the frontend
+source mounted read-only on each existing AMD64/ARM64 matrix runner. This uses
+the same Node major as the frontend build and requires no test dependencies or
+extra services. Builds and real OrcaSlicer backend checks remain in the matrix.
+`calculateQuote` clears its busy state in `finally`; after a 503/504 the selected
+file remains and the Calculate quote button is available for a manual retry.
+
+Pending operational validation: slow-upload/abuse protection, a hard overall
+geometry deadline, process-local admission (one Uvicorn worker/replica), and
+representative load tests on the shared ARM64 deployment host. No VPS load test
+or deployment is implied by local test results.

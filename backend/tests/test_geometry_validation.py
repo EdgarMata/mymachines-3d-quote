@@ -331,7 +331,7 @@ class TestGeometryEndpoints(unittest.TestCase):
         config = deepcopy(load_printing_config())
         config["materials"]["PETG"]["qualities"] = ["standard"]
         with patch("app.services.input_validation.load_printing_config", return_value=config), patch(
-            "app.services.slicer.subprocess.run"
+            "app.services.slicer.run_slicer_process"
         ) as subprocess:
             with self.assertRaises(inputs.InputValidationError):
                 slice_stl(Path(self.directory.name) / "part.stl", material="PETG", quality="fine")

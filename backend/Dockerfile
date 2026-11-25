@@ -73,4 +73,4 @@ ENV MYMACHINES_PROJECT_ROOT=/project
 ENV ORCA_COMMAND=/opt/orca/AppRun
 ENV ORCA_PRUSA_PRINTER_PROFILE=/project/profiles/printers/prusa_mk3s_0.4.json
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

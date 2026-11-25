@@ -3,10 +3,10 @@ import re
 import math
 import os
 import shlex
-import subprocess
 import tempfile
 from pathlib import Path
 from app.services.input_validation import InputValidationError, validate_printing_options
+from app.services.slicer_process import run_slicer_process
 from app.services.printing_config import (
     get_filament_profile,
     get_process_profile,
@@ -256,11 +256,7 @@ def slice_stl(
             str(stl_path),
         ]
 
-        process = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-        )
+        process = run_slicer_process(command)
 
         if process.returncode != 0:
             raise RuntimeError(

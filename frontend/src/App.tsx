@@ -1,3 +1,4 @@
+import { responseError } from "./apiErrors";
 import { useEffect, useState } from "react";
 import "./App.css";
 import ModelViewer from "./components/ModelViewer";
@@ -230,7 +231,7 @@ function App() {
         });
 
         if (!response.ok) {
-          throw new Error(`Model analysis failed (${response.status}).`);
+          throw new Error(await responseError(response, `Model analysis failed (${response.status}).`));
         }
 
         const data: AnalyzeResponse = await response.json();
@@ -290,11 +291,7 @@ function App() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-
-        throw new Error(
-          errorData.detail ?? `Backend returned ${response.status}`,
-        );
+        throw new Error(await responseError(response, `Backend returned ${response.status}`));
       }
 
       const data: EstimateResponse = await response.json();

@@ -2,7 +2,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
@@ -10,6 +10,8 @@ from app.services.upload_validation import (
     UploadBodyLimitMiddleware,
     validate_stl_upload,
 )
+from app.services.processing import ProcessingAdmissionMiddleware, run_processing
+from app.services.slicer_process import SlicerTimeoutError
 from app.services.orientation import orient_mesh
 from app.services.geometry_validation import load_validated_stl, geometry_summary
 from app.services.input_validation import (
@@ -36,6 +38,14 @@ async def invalid_input_handler(request, exc: InputValidationError):
     return JSONResponse(status_code=exc.status_code, content={"detail": str(exc)})
 
 
+@app.exception_handler(SlicerTimeoutError)
+async def slicer_timeout_handler(request, exc: SlicerTimeoutError):
+    return JSONResponse(
+        status_code=504,
+        content={"detail": "Slicing exceeded the allowed processing time. Please try again."},
+    )
+
+
 DEFAULT_PROJECT_ROOT = (
     Path.home()
     / "Projetos"
@@ -49,6 +59,8 @@ PROJECT_ROOT = Path(
     )
 )
 
+app.add_middleware(UploadBodyLimitMiddleware)
+app.add_middleware(ProcessingAdmissionMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -59,8 +71,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.add_middleware(UploadBodyLimitMiddleware)
 
 MATERIALS = {
     "PLA": {
@@ -153,14 +163,17 @@ def get_options():
     }
 
 @app.post("/upload")
-async def upload_model(file: UploadFile = File(...)):
+async def upload_model(request: Request, file: UploadFile = File(...)):
     filename, contents = await validate_stl_upload(file)
+    return await run_processing(request, _upload_model, filename, contents, file.content_type)
 
+
+def _upload_model(filename, contents, content_type):
     mesh = load_validated_stl(contents)
 
     return {
         "filename": filename,
-        "content_type": file.content_type,
+        "content_type": content_type,
         "size_bytes": len(contents),
         "geometry": geometry_summary(mesh),
         "status": "analysed",
@@ -168,9 +181,12 @@ async def upload_model(file: UploadFile = File(...)):
 
 
 @app.post("/slice")
-async def slice_model(file: UploadFile = File(...)):
+async def slice_model(request: Request, file: UploadFile = File(...)):
     filename, contents = await validate_stl_upload(file)
+    return await run_processing(request, _slice_model, filename, contents)
 
+
+def _slice_model(filename, contents):
     validate_printing_options("PLA", "standard")
     load_validated_stl(contents)
 
@@ -198,7 +214,7 @@ async def slice_model(file: UploadFile = File(...)):
 
             result = slice_stl(stl_path)
 
-    except InputValidationError:
+    except (InputValidationError, SlicerTimeoutError):
         raise
 
     except Exception as exc:
@@ -215,20 +231,21 @@ async def slice_model(file: UploadFile = File(...)):
 
 @app.post("/analyze")
 async def analyze_model(
+    request: Request,
     file: UploadFile = File(...),
     rotation_x: float = 0,
     rotation_y: float = 0,
     rotation_z: float = 0,
 ):
-    """
-    Analyze the oriented model and identify compatible machines.
-
-    This endpoint does not perform slicing or calculate pricing.
-    """
-
+    """Analyze orientation and machine compatibility without slicing or pricing."""
     validate_rotations(rotation_x, rotation_y, rotation_z)
     filename, contents = await validate_stl_upload(file)
+    return await run_processing(
+        request, _analyze_model, filename, contents, rotation_x, rotation_y, rotation_z
+    )
 
+
+def _analyze_model(filename, contents, rotation_x, rotation_y, rotation_z):
     mesh = load_validated_stl(contents)
 
     project_root = PROJECT_ROOT
@@ -256,7 +273,7 @@ async def analyze_model(
                 orientation_result["dimensions_mm"]
             )
 
-    except InputValidationError:
+    except (InputValidationError, SlicerTimeoutError):
         raise
 
     except Exception as exc:
@@ -311,6 +328,7 @@ async def analyze_model(
 
 @app.post("/estimate")
 async def estimate_model(
+    request: Request,
     file: UploadFile = File(...),
     quantity: int = 1,
     material: str = "PLA",
@@ -321,8 +339,15 @@ async def estimate_model(
 ):
     validate_quantity(quantity)
     validate_rotations(rotation_x, rotation_y, rotation_z)
-    material, quality = validate_printing_options(material, quality)
     filename, contents = await validate_stl_upload(file)
+    return await run_processing(
+        request, _estimate_model, filename, contents, quantity, material, quality,
+        rotation_x, rotation_y, rotation_z,
+    )
+
+
+def _estimate_model(filename, contents, quantity, material, quality, rotation_x, rotation_y, rotation_z):
+    material, quality = validate_printing_options(material, quality)
     mesh = load_validated_stl(contents)
     geometry = geometry_summary(mesh)
 
@@ -417,7 +442,7 @@ async def estimate_model(
             )
             validate_slicing_result(slicing)
 
-    except InputValidationError:
+    except (InputValidationError, SlicerTimeoutError):
         raise
 
     except Exception as exc:
@@ -465,7 +490,7 @@ async def estimate_model(
             ),
         }
 
-    except InputValidationError:
+    except (InputValidationError, SlicerTimeoutError):
         raise
 
     except Exception as exc:

@@ -170,7 +170,7 @@ class TestFinalGeometryBoundaries(unittest.TestCase):
             return CompletedProcess(command, 0, "", "")
 
         with patch("app.services.slicer.PROJECT_ROOT", self.root), patch(
-            "app.services.slicer.subprocess.run", side_effect=fake_orca
+            "app.services.slicer.run_slicer_process", side_effect=fake_orca
         ):
             with self.assertRaises(InputValidationError) as error:
                 slice_stl(source)
