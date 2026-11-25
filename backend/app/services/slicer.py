@@ -1,10 +1,12 @@
 
 import re
+import math
 import os
 import shlex
 import subprocess
 import tempfile
 from pathlib import Path
+from app.services.input_validation import InputValidationError, validate_printing_options
 from app.services.printing_config import (
     get_filament_profile,
     get_process_profile,
@@ -58,6 +60,30 @@ ORCA_PRINTER_PROFILES = {
     ),
 }
 
+def validate_slicing_result(result: dict) -> None:
+    """Do not turn missing/empty or non-finite slicing output into a quote."""
+    def valid_number(key: str, positive: bool = True) -> bool:
+        value = result.get(key)
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return False
+        try:
+            return math.isfinite(value) and (value > 0 if positive else value >= 0)
+        except OverflowError:
+            return False
+
+    # Mass is the canonical material-consumption field returned by OrcaSlicer.
+    valid = all(valid_number(key) for key in ("print_time_seconds", "filament_g"))
+    valid = valid and valid_number("material_cost_eur", positive=False)
+    for key in ("filament_mm", "filament_cm3", "layers"):
+        if key in result:
+            valid = valid and valid_number(key)
+    if not valid:
+        raise InputValidationError(
+            "The model did not produce a usable print with valid time and material consumption.",
+            status_code=422,
+        )
+
+
 def parse_print_time(value: str) -> int:
     """
     Convert values such as:
@@ -67,6 +93,9 @@ def parse_print_time(value: str) -> int:
 
     into total seconds.
     """
+
+    if not re.fullmatch(r"\s*(?:(?:[0-9]+)h\s*)?(?:(?:[0-9]+)m\s*)?(?:(?:[0-9]+)s\s*)?", value):
+        return 0
 
     hours = 0
     minutes = 0
@@ -98,21 +127,22 @@ def extract_gcode_stats(gcode_path: Path) -> dict:
         errors="ignore",
     )
 
+    number = r"([^\s]+)[ \t]*\r?$"
     patterns = {
         "filament_mm": (
-            r"; filament used \[mm\] = ([0-9.]+)"
+            r"; filament used \[mm\] = " + number
         ),
         "filament_cm3": (
-            r"; filament used \[cm3\] = ([0-9.]+)"
+            r"; filament used \[cm3\] = " + number
         ),
         "filament_g": (
-            r"; total filament used \[g\] = ([0-9.]+)"
+            r"; total filament used \[g\] = " + number
         ),
         "material_cost_eur": (
-            r"; total filament cost = ([0-9.]+)"
+            r"; total filament cost = " + number
         ),
         "layers": (
-            r"; total layers count = (\d+)"
+            r"; total layers count = " + number
         ),
         "print_time": (
             r"; estimated printing time "
@@ -123,7 +153,7 @@ def extract_gcode_stats(gcode_path: Path) -> dict:
     result = {}
 
     for key, pattern in patterns.items():
-        match = re.search(pattern, text)
+        match = re.search(pattern, text, flags=re.MULTILINE)
 
         if match:
             result[key] = match.group(1)
@@ -170,8 +200,7 @@ def slice_stl(
     machine_id: str = "prusa_mk3s_04",
 ) -> dict:
     stl_path = Path(stl_path).resolve()
-    material = material.upper()
-    quality = quality.lower()
+    material, quality = validate_printing_options(material, quality)
 
     if machine_id not in ORCA_PRINTER_PROFILES:
         raise ValueError(
@@ -255,9 +284,13 @@ def slice_stl(
 
         gcode_path = gcode_files[0]
 
-        stats = extract_gcode_stats(
-            gcode_path
-        )
+        try:
+            stats = extract_gcode_stats(gcode_path)
+        except (ValueError, OverflowError) as exc:
+            raise InputValidationError(
+                "The model did not produce valid print statistics.", status_code=422
+            ) from exc
+        validate_slicing_result(stats)
 
         return {
             "status": "success",

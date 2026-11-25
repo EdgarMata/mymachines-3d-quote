@@ -134,6 +134,13 @@ The quotation engine uses configurable JSON files.
 
 The included cost parameters are illustrative and should be adapted to each business before commercial use.
 
+Backend safety limits default to 50 MiB per STL, 1,000,000 input triangles and
+1–100 units per automatic estimate. STL geometry and printing parameters are
+validated before slicing. Open/non-watertight models with usable finite surface
+are accepted, but may still need repair or technical review. See
+[Architecture](docs/ARCHITECTURE.md) for the acceptance policy and
+[Deployment](docs/DEPLOYMENT.md) for environment settings and proxy limits.
+
 ## Project Structure
 
 ```text

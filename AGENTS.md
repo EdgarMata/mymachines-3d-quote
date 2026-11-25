@@ -20,4 +20,4 @@ Build a robust, maintainable, open-source FDM instant quotation service for MyMa
 - Do not expose the current internal deployment publicly or execute the image publication workflow until the maintainer approves the relevant security and licensing gates.
 
 ## Current focus
-See `docs/PROJECT_STATUS.md` and `docs/ROADMAP.md`. The first private ARM64 deployment and browser quote succeeded. MM-001 upload byte limits and filename protection are implemented. Bounded geometry/processing, cleanup and API response review remain pending; start them only when requested. No new frontend features or pricing formula changes now. Odoo integration is a later phase.
+See `docs/PROJECT_STATUS.md` and `docs/ROADMAP.md`. The first private ARM64 deployment and browser quote succeeded. MM-001 upload byte limits and filename protection are committed. MM-002 geometry/parameter validation is implemented and reviewed; inspect tests and Git before continuing. Concurrency/time bounds, storage policy and the full API response review remain pending; start them only when requested. No new frontend features or pricing formula changes now. Odoo integration is a later phase.

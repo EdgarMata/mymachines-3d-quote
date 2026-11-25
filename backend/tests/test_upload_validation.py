@@ -80,7 +80,7 @@ class TestUploadEndpoints(unittest.TestCase):
         self.assertEqual(list(Path(self.directory.name).iterdir()), [])
 
     def test_valid_geometry_at_exact_limit_on_all_endpoints(self):
-        slicing = {"material_cost_eur": 0.38, "print_time_seconds": 7830}
+        slicing = {"material_cost_eur": 0.38, "print_time_seconds": 7830, "filament_g": 23.75}
         with patch.object(validation, "MAX_UPLOAD_SIZE_BYTES", len(self.stl)), patch("app.main.slice_stl", return_value=slicing):
             for endpoint in ("/upload", "/slice", "/analyze", "/estimate"):
                 with self.subTest(endpoint=endpoint):

@@ -19,6 +19,8 @@ def select_machine(
 
     default_machine = config["default_machine"]
 
+    # Zero thickness is valid for an analyzable open surface. Geometry validation
+    # checks usable area; eligibility, fit and printer preference stay unchanged.
     # Validate model dimensions
     required_axes = ("x", "y", "z")
 
@@ -32,10 +34,10 @@ def select_machine(
                 f"Invalid model dimension: {axis}"
             )
 
-        if not math.isfinite(value) or value <= 0:
+        if not math.isfinite(value) or value < 0:
             raise ValueError(
                 f"Model dimension {axis} must be a finite "
-                "number greater than zero."
+                "non-negative number."
             )
 
         dimensions[axis] = value

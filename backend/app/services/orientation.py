@@ -4,6 +4,9 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
+from app.services.geometry_validation import load_validated_stl, validate_mesh
+from app.services.input_validation import validate_rotations
+
 
 def orient_stl(
     input_path: Path,
@@ -12,47 +15,31 @@ def orient_stl(
     y: float = 0,
     z: float = 0,
 ) -> dict:
-    """
-    Rotate an STL model using Three.js XYZ Euler
-    rotation convention.
+    """Compatibility wrapper for internal callers that start from a path."""
+    validate_rotations(x, y, z)
+    mesh = load_validated_stl(Path(input_path).read_bytes())
+    return orient_mesh(mesh, output_path, x, y, z)
 
-    After rotation:
-    - Centre the model in X and Y.
-    - Place its lowest point at Z = 0.
-    - Export the transformed STL.
-    """
 
-    input_path = Path(input_path)
+def orient_mesh(
+    mesh: trimesh.Trimesh,
+    output_path: Path,
+    x: float = 0,
+    y: float = 0,
+    z: float = 0,
+) -> dict:
+    """Orient a validated mesh using the viewer's Three.js XYZ convention.
+
+    Copy the in-memory mesh instead of reparsing the STL. Preserve the original
+    mesh for the public geometry summary; centre XY and place minimum Z at zero.
+    """
+    validate_rotations(x, y, z)
+    mesh = mesh.copy()
     output_path = Path(output_path)
-
-    # Validate rotation values
-    angles = (x, y, z)
-
-    if not all(math.isfinite(value) for value in angles):
-        raise ValueError(
-            "Rotation angles must be finite numbers."
-        )
-
-    if not input_path.is_file():
-        raise FileNotFoundError(
-            f"STL file not found: {input_path}"
-        )
-
-    # Load original geometry
-    mesh = trimesh.load(
-        input_path,
-        file_type="stl",
-        force="mesh",
-    )
-
-    if mesh.is_empty:
-        raise ValueError(
-            "The STL contains no geometry."
-        )
 
     # Convert degrees to radians
     rx, ry, rz = np.radians(
-        [x, y, z]
+        [math.remainder(angle, 360.0) for angle in (x, y, z)]
     )
 
     # Rotation around X
@@ -111,6 +98,8 @@ def orient_stl(
 
     # Final dimensions
     dimensions = mesh.extents
+
+    validate_mesh(mesh)
 
     # Save the oriented STL
     output_path.parent.mkdir(

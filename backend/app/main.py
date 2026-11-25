@@ -1,22 +1,27 @@
-import io
 import os
 import tempfile
 from pathlib import Path
 
-import trimesh
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
+
 from app.services.upload_validation import (
     UploadBodyLimitMiddleware,
     validate_stl_upload,
 )
-from app.services.orientation import orient_stl
+from app.services.orientation import orient_mesh
+from app.services.geometry_validation import load_validated_stl, geometry_summary
+from app.services.input_validation import (
+    InputValidationError,
+    validate_printing_options,
+    validate_quantity,
+    validate_rotations,
+)
 from app.services.machine_selector import select_machine
 from app.services.pricing import calculate_pricing, load_pricing_config
-from app.services.slicer import slice_stl
+from app.services.slicer import slice_stl, validate_slicing_result
 from app.services.printing_config import (
-    get_available_materials,
-    get_available_qualities,
     load_printing_config,
 )
 
@@ -24,6 +29,12 @@ app = FastAPI(
     title="MyMachines 3D Quote API",
     version="0.3.0",
 )
+
+
+@app.exception_handler(InputValidationError)
+async def invalid_input_handler(request, exc: InputValidationError):
+    return JSONResponse(status_code=exc.status_code, content={"detail": str(exc)})
+
 
 DEFAULT_PROJECT_ROOT = (
     Path.home()
@@ -145,46 +156,13 @@ def get_options():
 async def upload_model(file: UploadFile = File(...)):
     filename, contents = await validate_stl_upload(file)
 
-    try:
-        mesh = trimesh.load(
-            io.BytesIO(contents),
-            file_type="stl",
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unable to read STL file: {exc}",
-        )
-
-    if isinstance(mesh, trimesh.Scene):
-        if not mesh.geometry:
-            raise HTTPException(
-                status_code=400,
-                detail="The STL contains no geometry.",
-            )
-
-        mesh = trimesh.util.concatenate(
-            tuple(mesh.geometry.values())
-        )
-
-    dimensions = mesh.extents
+    mesh = load_validated_stl(contents)
 
     return {
         "filename": filename,
         "content_type": file.content_type,
         "size_bytes": len(contents),
-        "geometry": {
-            "dimensions_mm": {
-                "x": round(float(dimensions[0]), 3),
-                "y": round(float(dimensions[1]), 3),
-                "z": round(float(dimensions[2]), 3),
-            },
-            "volume_mm3": round(float(abs(mesh.volume)), 3),
-            "surface_area_mm2": round(float(mesh.area), 3),
-            "vertices": int(len(mesh.vertices)),
-            "faces": int(len(mesh.faces)),
-            "watertight": bool(mesh.is_watertight),
-        },
+        "geometry": geometry_summary(mesh),
         "status": "analysed",
     }
 
@@ -192,6 +170,9 @@ async def upload_model(file: UploadFile = File(...)):
 @app.post("/slice")
 async def slice_model(file: UploadFile = File(...)):
     filename, contents = await validate_stl_upload(file)
+
+    validate_printing_options("PLA", "standard")
+    load_validated_stl(contents)
 
     try:
         project_root = PROJECT_ROOT
@@ -217,11 +198,14 @@ async def slice_model(file: UploadFile = File(...)):
 
             result = slice_stl(stl_path)
 
+    except InputValidationError:
+        raise
+
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Slicing failed: {exc}",
-        )
+            detail="Slicing failed.",
+        ) from exc
 
     return {
         "filename": filename,
@@ -242,29 +226,25 @@ async def analyze_model(
     This endpoint does not perform slicing or calculate pricing.
     """
 
+    validate_rotations(rotation_x, rotation_y, rotation_z)
     filename, contents = await validate_stl_upload(file)
+
+    mesh = load_validated_stl(contents)
 
     project_root = PROJECT_ROOT
 
     temp_root = project_root / "tmp" / "analysis"
 
-    temp_root.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
     try:
+        temp_root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=temp_root) as tmp_dir:
             tmp_path = Path(tmp_dir)
 
-            original_stl = tmp_path / "original.stl"
             oriented_stl = tmp_path / "oriented.stl"
 
-            original_stl.write_bytes(contents)
-
             # Apply the orientation selected in the viewer.
-            orientation_result = orient_stl(
-                input_path=original_stl,
+            orientation_result = orient_mesh(
+                mesh=mesh,
                 output_path=oriented_stl,
                 x=rotation_x,
                 y=rotation_y,
@@ -276,16 +256,13 @@ async def analyze_model(
                 orientation_result["dimensions_mm"]
             )
 
-    except (ValueError, FileNotFoundError) as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model analysis failed: {exc}",
-        ) from exc
+    except InputValidationError:
+        raise
 
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Model analysis failed: {exc}",
+            detail="Model analysis failed.",
         ) from exc
 
     # The temporary STL has already been deleted.
@@ -342,96 +319,12 @@ async def estimate_model(
     rotation_y: float = 0,
     rotation_z: float = 0,
 ):
+    validate_quantity(quantity)
+    validate_rotations(rotation_x, rotation_y, rotation_z)
+    material, quality = validate_printing_options(material, quality)
     filename, contents = await validate_stl_upload(file)
-
-    material = material.upper()
-    quality = quality.lower()
-
-    available_materials = get_available_materials()
-
-    if material not in available_materials:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Unsupported material. "
-                f"Available materials: "
-                f"{', '.join(available_materials)}."
-            ),
-        )
-
-    available_qualities = get_available_qualities()
-
-    if quality not in available_qualities:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Unsupported quality. "
-                f"Available qualities: "
-                f"{', '.join(available_qualities)}."
-            ),
-        )
-
-    # ---------------------------------------------
-    # Geometry analysis
-    # ---------------------------------------------
-
-    try:
-        mesh = trimesh.load(
-            io.BytesIO(contents),
-            file_type="stl",
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unable to read STL file: {exc}",
-        )
-
-    if isinstance(mesh, trimesh.Scene):
-        if not mesh.geometry:
-            raise HTTPException(
-                status_code=400,
-                detail="The STL contains no geometry.",
-            )
-
-        mesh = trimesh.util.concatenate(
-            tuple(mesh.geometry.values())
-        )
-
-    dimensions = mesh.extents
-
-    geometry = {
-        "dimensions_mm": {
-            "x": round(
-                float(dimensions[0]),
-                3,
-            ),
-            "y": round(
-                float(dimensions[1]),
-                3,
-            ),
-            "z": round(
-                float(dimensions[2]),
-                3,
-            ),
-        },
-        "volume_mm3": round(
-            float(abs(mesh.volume)),
-            3,
-        ),
-        "surface_area_mm2": round(
-            float(mesh.area),
-            3,
-        ),
-        "vertices": int(
-            len(mesh.vertices)
-        ),
-        "faces": int(
-            len(mesh.faces)
-        ),
-        "watertight": bool(
-            mesh.is_watertight
-        ),
-    }
+    mesh = load_validated_stl(contents)
+    geometry = geometry_summary(mesh)
 
     # ---------------------------------------------
     # Slicing
@@ -456,27 +349,20 @@ async def estimate_model(
         ) as tmp_dir:
             tmp_path = Path(tmp_dir)
 
-            # Save original STL
-            original_stl = (
-                tmp_path / "original.stl"
-            )
-
-            original_stl.write_bytes(
-                contents
-            )
-
             # Prepare oriented STL
             oriented_stl = (
                 tmp_path / "oriented.stl"
             )
 
-            orientation_result = orient_stl(
-                input_path=original_stl,
+            orientation_result = orient_mesh(
+                mesh=mesh,
                 output_path=oriented_stl,
                 x=rotation_x,
                 y=rotation_y,
                 z=rotation_z,
             )
+
+            orientation_result.pop("output_file", None)
 
             # ---------------------------------------------
             # Machine selection
@@ -529,12 +415,16 @@ async def estimate_model(
                 quality=quality,
                 machine_id=selected_machine_id,
             )
+            validate_slicing_result(slicing)
+
+    except InputValidationError:
+        raise
 
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Slicing failed: {exc}",
-        )
+            detail="Slicing failed.",
+        ) from exc
 
     # ---------------------------------------------
     # Pricing
@@ -575,11 +465,14 @@ async def estimate_model(
             ),
         }
 
+    except InputValidationError:
+        raise
+
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Pricing failed: {exc}",
-        )
+            detail="Pricing failed.",
+        ) from exc
 
     # ---------------------------------------------
     # Final result

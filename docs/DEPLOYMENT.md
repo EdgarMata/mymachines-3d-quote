@@ -54,3 +54,33 @@ reverse proxy limits before an approved deployment. Nginx rejections may use an
 HTML response; clients must handle HTTP 413 without assuming JSON. These limits
 apply per request; concurrency and temporary-storage policy are separate pending
 gates. Local source-mounted verification does not update built or deployed images.
+
+## Geometry and printing parameter limits (MM-002)
+
+Backend-only environment settings, read at application startup:
+
+| Variable | Default | Meaning |
+|---|---:|---|
+| `MAX_STL_TRIANGLES` | `1000000` | Maximum input facets per STL, inclusive; binary and ASCII |
+| `MAX_QUANTITY` | `100` | Maximum units per automatic estimate; minimum is always 1 |
+
+Both must be positive integers. Invalid settings fail startup instead of removing
+the protection. Set them explicitly in the backend container environment when
+overriding defaults, then recreate the backend only during an approved deployment.
+No Nginx change is needed for these two settings. The independent MM-001 defaults
+remain 50 MiB per STL and 51 MiB per HTTP request. Increasing the byte or triangle
+limits increases resource exposure; no concurrency or execution-time guarantee is
+provided yet. ASCII structural preflight permits lines up to 4096 bytes.
+
+Local verification with the existing Docker image and current source/test mounts:
+
+```sh
+docker compose run --rm --no-deps \
+  -v "${PWD}/backend/app:/app/app:ro" \
+  -v "${PWD}/backend/tests:/app/tests:ro" \
+  backend python -m unittest discover -s /app/tests -v
+```
+
+This runs real OrcaSlicer integration tests as well as synthetic validation tests;
+it does not update a running service or image. ARM64 validation remains the native
+CI/deployment check, not an assertion derived from a local AMD64 test run.
