@@ -63,7 +63,6 @@ type MachineSelection = {
   }[];
 
   compatible_count: number;
-  quoting_candidates_count: number;
 };
 
 type EstimateBase = {
@@ -85,7 +84,6 @@ type EstimateBase = {
       minimum_z_mm: number;
     };
 
-    output_file: string;
   };
 
   machine_selection: MachineSelection;
@@ -96,9 +94,8 @@ type SuccessfulEstimate = EstimateBase & {
 
   slicing: {
     filament_g: number;
-    material_cost_eur: number;
-    layers: number;
-    print_time: string;
+    layers?: number | null;
+    print_time?: string | null;
     print_time_seconds: number;
   };
 

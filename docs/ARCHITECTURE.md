@@ -14,7 +14,7 @@
 4. Calculate price using actual slicer material cost and print time plus the selected machine's pricing configuration. Return customer-facing quote and useful manufacturing estimates.
 5. Oversized or unavailable compatible machines require technical review rather than an automatic price.
 
-Legacy `/upload` and `/slice` endpoints also accept STL. Review whether they need to be exposed in production; do not remove without checking consumers and tests.
+Legacy `/upload` and `/slice` endpoints also accept STL; they remain available by default in development and are disabled by default in production. Both use the same public response allowlists when enabled. See [API contracts](API_CONTRACTS.md) for the endpoint audit and deployment switches.
 
 ## Machine selection
 Select the smallest eligible compatible machine, using oriented dimensions and the existing configuration criteria (`quoting_enabled`, `profile_ready`, `operational`). Preserve the actual implementation's ordering and regression tests.
@@ -30,7 +30,7 @@ Select the smallest eligible compatible machine, using oriented dimensions and t
 Materials: PLA, PETG. Quality: Draft 0.30 mm, Standard 0.20 mm, Fine 0.12 mm. Defaults: Prusa MK3S, PLA, Standard. Enabled in configuration is not proof of physical availability or production qualification.
 
 ## Pricing
-The existing pricing module is the authoritative calculation; do not infer or change its formulas from this document. Existing tests cover reference pricing, setup/post-processing labour and failure-exposed costs. Public pricing currently includes machine, quantity, selling price and minimum-order flag. Review the rest of the response for leaks. Commercial pricing must be loaded from private configuration outside the public repository.
+The existing pricing module is the authoritative calculation; do not infer or change its formulas from this document. Existing tests cover reference pricing, setup/post-processing labour and failure-exposed costs. Public pricing includes only machine, quantity, selling price and minimum-order flag. MM-005 filters slicing and machine/orientation data through nested public models without changing those calculations. Commercial pricing must be loaded from private configuration outside the public repository; the MM-007 private configuration mechanism remains pending.
 
 ## Security boundary
 The API and slicer process untrusted files. File extension alone is insufficient. TemporaryDirectory handles normal cleanup; MM-004 adds lock-aware recovery of recognized abandoned workspaces and contains helper output. Heavy synchronous pipelines run in a bounded thread executor; ASGI admission limits active uploads and work before multipart parsing. Never rely on container CPU/RAM limits alone to prevent denial of service.
@@ -193,3 +193,24 @@ permanent model storage or new dependency is introduced. See
 [Temporary storage](TEMPORARY_STORAGE.md) for the audit, full protocol, container
 restart/recreation behavior and remaining risks, and
 [Deployment](DEPLOYMENT.md#temporary-storage-mm-004) for settings.
+
+## MM-005 — public API boundary
+
+`api_models.py` defines nested Pydantic success/response allowlists for all seven
+business/diagnostic endpoints. Internal geometry, orientation, machine selection,
+slicing and pricing service results remain independent of HTTP schemas. Unknown
+fields do not cross the boundary automatically. A discriminated estimate union
+preserves success versus technical-review/incompatibility states and explicit
+null slicing/pricing. The frontend retains its actual consumed fields; stale
+internal-cost/path type declarations are removed.
+
+`api_errors.py` provides constant request-validation errors, reviewed HTTP error
+messages, response-validation handling and a pure ASGI unexpected-error boundary.
+Diagnostics retain route templates and exception types without exception payloads,
+request bodies or raw slicer output. Existing HTTP status/admission/cancellation
+and temporary ownership guarantees remain. `api_config.py` controls development
+versus production defaults: optional legacy routes, API docs and explicit CORS
+origins. Production Compose selects production mode; same-origin Nginx works
+without a CORS grant. None of this is authentication, authorization or rate
+limiting. See [API contracts](API_CONTRACTS.md) for exact fields, audit, settings
+and remaining intentional disclosures.

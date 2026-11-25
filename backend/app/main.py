@@ -3,9 +3,18 @@ import tempfile
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse
+
+from app.api_config import load_api_settings
+from app.api_errors import PublicErrorMiddleware, http_error, response_error, validation_error
+from app.api_models import (
+    AnalyzeResponse, ErrorResponse, EstimateResponse, HealthResponse,
+    OptionsResponse, RootResponse, SliceResponse, UploadResponse,
+)
 
 from app.services.upload_validation import (
     UploadBodyLimitMiddleware,
@@ -36,11 +45,20 @@ async def lifespan(app):
         yield
 
 
+api_settings = load_api_settings()
+legacy = APIRouter()
 app = FastAPI(
     title="MyMachines 3D Quote API",
     version="0.3.0",
     lifespan=lifespan,
+    docs_url="/docs" if api_settings.docs else None,
+    redoc_url="/redoc" if api_settings.docs else None,
+    openapi_url="/openapi.json" if api_settings.docs else None,
+    responses={code: {"model": ErrorResponse} for code in (400, 413, 422, 500, 503, 504)},
 )
+app.add_exception_handler(RequestValidationError, validation_error)
+app.add_exception_handler(ResponseValidationError, response_error)
+app.add_exception_handler(StarletteHTTPException, http_error)
 
 
 @app.exception_handler(InputValidationError)
@@ -70,16 +88,17 @@ PROJECT_ROOT = Path(
 )
 
 app.add_middleware(UploadBodyLimitMiddleware)
-app.add_middleware(ProcessingAdmissionMiddleware)
+app.add_middleware(ProcessingAdmissionMiddleware, paths=(
+    {"/analyze", "/estimate", "/upload", "/slice"} if api_settings.legacy_endpoints
+    else {"/analyze", "/estimate"}
+))
+app.add_middleware(PublicErrorMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=list(api_settings.cors_origins),
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Accept"],
 )
 
 MATERIALS = {
@@ -98,7 +117,7 @@ MATERIALS = {
 }
 
 
-@app.get("/")
+@app.get("/", response_model=RootResponse)
 def root():
     return {
         "name": "MyMachines 3D Quote API",
@@ -107,13 +126,13 @@ def root():
     }
 
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 def health():
     return {
         "status": "healthy"
     }
 
-@app.get("/options")
+@app.get("/options", response_model=OptionsResponse)
 def get_options():
     config = load_printing_config()
 
@@ -172,7 +191,7 @@ def get_options():
         "machines": machines,
     }
 
-@app.post("/upload")
+@legacy.post("/upload", response_model=UploadResponse)
 async def upload_model(request: Request, file: UploadFile = File(...)):
     filename, contents = await validate_stl_upload(file)
     return await run_processing(request, _upload_model, filename, contents, file.content_type)
@@ -190,7 +209,7 @@ def _upload_model(filename, contents, content_type):
     }
 
 
-@app.post("/slice")
+@legacy.post("/slice", response_model=SliceResponse, response_model_exclude_unset=True)
 async def slice_model(request: Request, file: UploadFile = File(...)):
     filename, contents = await validate_stl_upload(file)
     return await run_processing(request, _slice_model, filename, contents)
@@ -224,7 +243,7 @@ def _slice_model(filename, contents):
         "slicing": result,
     }
 
-@app.post("/analyze")
+@app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_model(
     request: Request,
     file: UploadFile = File(...),
@@ -272,9 +291,7 @@ def _analyze_model(filename, contents, rotation_x, rotation_y, rotation_z):
             detail="Model analysis failed.",
         ) from exc
 
-    # The temporary STL has already been deleted.
-    # Do not expose its former filesystem path.
-    orientation_result.pop("output_file", None)
+    # The response model projects orientation onto its public allowlist.
 
     # Determine which machine should be shown in the viewer.
     selected_machine = machine_selection["selected_machine"]
@@ -316,7 +333,7 @@ def _analyze_model(filename, contents, rotation_x, rotation_y, rotation_z):
         "display_machine": selected_machine,
     }
 
-@app.post("/estimate")
+@app.post("/estimate", response_model=EstimateResponse, response_model_exclude_unset=True)
 async def estimate_model(
     request: Request,
     file: UploadFile = File(...),
@@ -361,8 +378,6 @@ def _estimate_model(filename, contents, quantity, material, quality, rotation_x,
                 y=rotation_y,
                 z=rotation_z,
             )
-
-            orientation_result.pop("output_file", None)
 
             # ---------------------------------------------
             # Machine selection
@@ -495,3 +510,7 @@ def _estimate_model(filename, contents, quantity, material, quality, rotation_x,
 
         "pricing": public_pricing,
 }
+
+
+if api_settings.legacy_endpoints:
+    app.include_router(legacy)

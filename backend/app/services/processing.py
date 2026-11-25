@@ -60,13 +60,14 @@ processing_capacity = ProcessingCapacity(MAX_CONCURRENT_PROCESSING_JOBS)
 
 
 class ProcessingAdmissionMiddleware:
-    def __init__(self, app: ASGIApp, capacity: ProcessingCapacity | None = None):
+    def __init__(self, app: ASGIApp, capacity: ProcessingCapacity | None = None, paths=None):
         self.app = app
         self.capacity = capacity if capacity is not None else processing_capacity
+        self.paths = PROCESSING_PATHS if paths is None else frozenset(paths)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         if (scope["type"] != "http" or scope["method"] != "POST"
-                or scope["path"].rstrip("/") not in PROCESSING_PATHS):
+                or scope["path"].rstrip("/") not in self.paths):
             return await self.app(scope, receive, send)
         lease = self.capacity.admit()
         if lease is None:

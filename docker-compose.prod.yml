@@ -11,6 +11,7 @@ services:
     restart: unless-stopped
 
     environment:
+      APP_ENV: production
       MYMACHINES_PROJECT_ROOT: /project
       ORCA_COMMAND: /opt/orca/AppRun
       ORCA_PRUSA_PRINTER_PROFILE: /project/profiles/printers/prusa_mk3s_0.4.json

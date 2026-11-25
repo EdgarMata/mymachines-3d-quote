@@ -1,10 +1,12 @@
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import trimesh
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.slicer import slice_stl
 
 
 class TestEstimateEndpoint(unittest.TestCase):
@@ -69,7 +71,14 @@ class TestEstimateEndpoint(unittest.TestCase):
             cls.test_file.unlink()
 
     def test_estimate_uses_my_cloner_end_to_end(self):
-        with self.test_file.open("rb") as stl_file:
+        internal_results = []
+
+        def real_slice(*args, **kwargs):
+            result = slice_stl(*args, **kwargs)
+            internal_results.append(result)
+            return result
+
+        with self.test_file.open("rb") as stl_file, patch("app.main.slice_stl", side_effect=real_slice):
             response = self.client.post(
                 (
                     "/estimate"
@@ -114,9 +123,10 @@ class TestEstimateEndpoint(unittest.TestCase):
         )
 
         self.assertEqual(
-            result["slicing"]["printer_profile"],
+            internal_results[0]["printer_profile"],
             "my_cloner_04.json",
         )
+        self.assertNotIn("printer_profile", result["slicing"])
 
         self.assertEqual(
             result["pricing"]["machine"],
@@ -146,4 +156,3 @@ class TestEstimateEndpoint(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-    

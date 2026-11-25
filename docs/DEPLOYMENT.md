@@ -192,3 +192,45 @@ those files. See [Temporary storage](TEMPORARY_STORAGE.md) for the inventory,
 lock/recovery protocol, privacy policy, small metadata-creation crash window and
 limitations. Deleting files does not imply physical secure erasure. Native ARM64
 CI and representative deployment resource tests remain separate verification.
+
+## Public API settings (MM-005)
+
+Production Compose now explicitly sets `APP_ENV: production`. This removes
+`/upload` and `/slice` registration and disables `/docs`, `/docs/oauth2-redirect`,
+`/redoc` and `/openapi.json` by default. The browser's `/options`, `/analyze` and
+`/estimate` paths, Nginx prefix handling and health checks are preserved. Both
+legacy routes remain enabled and tested in the default development environment.
+
+| Backend variable | Default / override |
+|---|---|
+| `APP_ENV` | `development` if unset; production Compose explicitly uses `production` |
+| `ENABLE_LEGACY_ENDPOINTS` | `true` in development, `false` in production |
+| `ENABLE_API_DOCS` | `true` in development, `false` in production |
+| `CORS_ALLOWED_ORIGINS` | Local Vite origins in development; empty in production |
+
+Boolean overrides accept only true/false, ignoring case. CORS overrides are a
+comma-separated list of explicit HTTP(S) origins (no wildcard, credentials,
+query, fragment or non-root path). CORS credentials are disabled; cross-origin
+GET/POST and Content-Type/Accept suffice for the existing browser. Same-origin
+requests through Nginx work with the empty production list. Invalid settings
+prevent startup without echoing configured values. Apply overrides only in the
+backend container environment during an approved deployment.
+
+Explicitly re-enabling docs or legacy routes is possible for controlled testing;
+their business responses still exclude internal information. Hiding a schema and
+blocking browser cross-origin reads do not protect enabled endpoints from direct
+clients. No authentication or MM-006 rate limiting is added here. Source changes
+and local tests do not update existing images or deployments.
+
+See [API contracts](API_CONTRACTS.md) for the full response/error allowlists and
+diagnostic policy. New API diagnostics omit payloads and raw exception text;
+standard server/proxy access logs can still include client IPs/query strings.
+Review access-log retention/redaction separately before public deployment. Private
+commercial configuration is still MM-007, not implemented by these settings.
+
+MM-005 final review includes nine opt-in local HTTP checks through Nginx using
+`backend/tests/nginx_smoke.py`, covering real slicing and production route defaults.
+See API_CONTRACTS.md for setup constraints and manual browser steps. Browser-control
+access was unavailable in that review, so visual/interactive functional approval
+remains pending. Public prices can still support inference of internal costs or
+margins; response allowlists prevent direct disclosure, not that inference.

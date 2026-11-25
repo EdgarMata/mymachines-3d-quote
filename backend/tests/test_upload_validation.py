@@ -96,7 +96,7 @@ class TestUploadEndpoints(unittest.TestCase):
             self.assertEqual(path.name, "original.stl")
             self.assertTrue(path.is_relative_to(Path(self.directory.name)))
             self.assertEqual(path.read_bytes(), self.stl)
-            return {}
+            return {"print_time_seconds": 60, "filament_g": 1.0}
 
         with patch("app.main.slice_stl", side_effect=slice_file):
             for name in ("../../outside.stl", "/tmp/outside.stl", "C:\\temp\\outside.stl"):

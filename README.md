@@ -115,6 +115,13 @@ The backend API documentation is available locally at:
 http://localhost:8000/docs
 ```
 
+Production Compose disables the legacy upload/slice utilities and interactive API
+documentation by default. The frontend continues to use `/options`, `/analyze`
+and `/estimate` through Nginx. Public responses use explicit nested allowlists;
+internal slicing costs, profile paths and operational flags stay server-side.
+See [API contracts](docs/API_CONTRACTS.md) for response fields, errors, CORS and
+development/production settings. These controls do not provide authentication.
+
 To stop the application:
 
 ```bash
