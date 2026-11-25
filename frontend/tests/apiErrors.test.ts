@@ -2,6 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { responseError } from "../src/apiErrors.ts";
 
+test("rate rejection explains manual retry for JSON and HTML responses", async () => {
+  for (const body of ["<html>Too Many Requests</html>", JSON.stringify({ detail: "Too many requests." })]) {
+    const message = await responseError(new Response(body, { status: 429 }), "fallback");
+    assert.match(message, /too many requests/i);
+    assert.match(message, /try again/i);
+  }
+});
+
 test("busy response explains retrying without requiring a JSON body", async () => {
   const message = await responseError(new Response("<html>Busy</html>", { status: 503 }), "fallback");
   assert.match(message, /server is busy/i);

@@ -154,6 +154,14 @@ directories become eligible for recovery after one hour, checked at startup and
 every five minutes. Active locks prevent age-based deletion of running jobs. See
 [Temporary storage](docs/TEMPORARY_STORAGE.md) for ownership, privacy and limits.
 
+Frontend Nginx adds per-IP request/active-connection limits, global budgets and
+receive inactivity timeouts. Excess requests return safe HTTP 429 messages and
+can be retried manually. Direct development trusts no forwarded client headers;
+production requires an operator-owned exact proxy allowlist and verified NPM
+header replacement. See [Abuse protection](docs/ABUSE_PROTECTION.md) before
+configuring production or SSH-only internal access. Continuously slow uploads
+and distributed attacks still require edge and operational controls.
+
 ## Project Structure
 
 ```text

@@ -214,3 +214,36 @@ origins. Production Compose selects production mode; same-origin Nginx works
 without a CORS grant. None of this is authentication, authorization or rate
 limiting. See [API contracts](API_CONTRACTS.md) for exact fields, audit, settings
 and remaining intentional disclosures.
+
+## MM-006 — ingress abuse protection
+
+The intended public chain is client → NPM → frontend Nginx → FastAPI. Native
+frontend Nginx shared zones limit analysis (30/minute/IP, burst 5), estimates and
+legacy slicing (shared 10/minute/IP, burst 2), options (60/minute/IP, burst 10),
+and other API calls (60/minute/IP, burst 5). A global 10/second, burst 20 pool
+and active-request caps of 5/IP and 20 globally cover this frontend instance.
+All bursts use nodelay and controlled JSON 429; backend 503/Retry-After and 504
+remain distinct. Only bodyless GET/HEAD health probes bypass these counters.
+
+The default direct-access image trusts no forwarding headers. Production mounts
+an operator-owned exact-IP allowlist and refuses empty/overbroad trust. Only the
+listed immediate NPM peer may supply X-Real-IP; NPM must overwrite it with its
+verified client address. Frontend replaces X-Forwarded-For and X-Real-IP with the
+canonical address and removes Forwarded. No shared Docker network is trusted.
+Actual peers/header behavior must be verified during a later approved deployment.
+
+Ambiguous/list/duplicate X-Real-IP headers are rejected before body processing;
+missing or invalid numeric literals retain the TCP peer budget. NPM address
+changes require revoking stale trust and recreating frontend with a verified
+current private allowlist while public traffic stays closed. Trust is not
+automatically refreshed or inferred from Docker network membership.
+
+Receive inactivity is 30s for bodies, headers have 10s and idle keepalive 15s.
+51 MiB request buffering/unlinked temporary bodies and the 90s upstream read
+timeout remain. Continuously active slow uploads have no absolute deadline;
+outer NPM buffering is outside these frontend counters. Native tests exercise a
+representative trusted/untrusted proxy chain, actual production rates and shorter
+test-only intervals in isolated Docker containers. See
+[Abuse protection](ABUSE_PROTECTION.md) for exact semantics, deployment settings,
+test commands and limitations. No Python limiter, dependency or pricing change
+is introduced.

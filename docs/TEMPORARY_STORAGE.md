@@ -149,9 +149,13 @@ matches is also preserved. Permission failures can require operator action.
 No automated migration or generic disk cleanup is included.
 
 This is not a hard disk quota: active G-code, logs and JSON can grow, and many
-buffered proxy uploads can consume space before backend admission. Slow uploads,
-abuse/rate limiting, hard total geometry deadlines, single-process admission and
-real deployment load/storage validation remain pending. Inherited descriptors
+buffered proxy uploads can consume space before backend admission. MM-006 adds
+Nginx rate/active-request limits and receive inactivity timeouts, preserving
+buffering and automatic unlinked-body cleanup; see
+[Abuse protection](ABUSE_PROTECTION.md). NPM can buffer before frontend controls
+apply and continuously active slow uploads can still occupy slots indefinitely.
+Hard total geometry deadlines, single-process admission and real deployment
+load/storage validation remain pending. Inherited descriptors
 depend on child processes preserving them; deliberately escaped process groups,
 closed locks, compromised native processes or uninterruptible I/O are not solved
 by this policy. Native AMD64/ARM64 CI remains necessary; local tests are not a

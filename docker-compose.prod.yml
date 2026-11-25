@@ -47,6 +47,17 @@ services:
 
     restart: unless-stopped
 
+    environment:
+      REQUIRE_TRUSTED_PROXY: "true"
+
+    volumes:
+      - type: bind
+        source: ${NGINX_TRUSTED_PROXIES_FILE:?Set an operator-owned file with verified exact proxy IPs}
+        target: /etc/nginx/trusted-proxies.conf
+        read_only: true
+        bind:
+          create_host_path: false
+
     depends_on:
       backend:
         condition: service_healthy

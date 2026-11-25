@@ -123,6 +123,20 @@ as processing admission). Nginx/outer proxies can still emit HTML transport erro
 and CORS preflight rejections retain Starlette's short English protocol response;
 the existing frontend tolerates non-JSON errors.
 
+MM-006 adds frontend-Nginx HTTP 429 for request/active-connection limits, with
+`{"detail":"Too many requests. Please wait a moment and try again."}`.
+No Retry-After is guessed for these different rate/connection pools. The frontend
+shows this controlled message for JSON or HTML 429, including options loading,
+and retains manual analysis/quote retry without automatic loops. Backend 503
+Retry-After 5 and 504 semantics remain unchanged. See
+[Abuse protection](ABUSE_PROTECTION.md) for the proxy trust boundary and limits;
+outer proxies can still emit their own transport responses.
+
+MM-006 final review rejects ambiguous/list/duplicate X-Real-IP headers at Nginx
+with a controlled 400 before body processing. Missing or invalid numeric literals
+retain the TCP peer identity and budget; arbitrary X-Forwarded-For never selects
+an identity. This does not change backend 400 validation or response allowlists.
+
 Default server/proxy access logging can include client IPs and query strings.
 No multipart/model body logging is added here. Deployment-specific access-log
 redaction, retention and operator access need separate review; this is not a
@@ -181,7 +195,8 @@ inference of costs, margins or pricing parameters by comparing public prices
 across models, materials and quantities. The open-source pricing algorithm and
 observable quote behavior are not a commercial-secrecy guarantee.
 
-Rate limiting/abuse protection is MM-006. Other existing limitations remain:
+Rate limiting/abuse protection is documented in [MM-006](ABUSE_PROTECTION.md).
+Other existing limitations remain:
 single-process admission, no global geometry deadline or hard storage quota,
 native-code/helper sandbox limitations and real deployment load validation. No
 dependency, image publication, remote infrastructure change or deployment is required

@@ -53,6 +53,9 @@ jobs:
             -v "${PWD}/frontend:/app:ro" \
             -w /app node:24-alpine npm test
 
+      - name: Test native Nginx abuse protection and trusted proxy chain
+        run: backend/tests/run_nginx_abuse_tests.sh
+
       - name: Generate backend SBOM
         uses: anchore/sbom-action@v0
         with:

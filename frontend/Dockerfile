@@ -23,6 +23,8 @@ LABEL org.opencontainers.image.title="My-Instant 3D Quote Frontend" \
     org.opencontainers.image.vendor="MyMachines"
 
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/nginx-trusted-proxies.conf /etc/nginx/trusted-proxies.conf
+COPY --chmod=755 frontend/15-validate-trusted-proxies.sh /docker-entrypoint.d/15-validate-trusted-proxies.sh
 
 COPY --from=build /app/dist /usr/share/nginx/html
 

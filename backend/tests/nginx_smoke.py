@@ -9,6 +9,7 @@ import json
 import re
 import sys
 import threading
+import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode, urlsplit
@@ -24,7 +25,7 @@ BASE_URL = sys.argv.pop(1).rstrip("/") if len(sys.argv) > 1 else "http://fronten
 STL = trimesh.creation.box(extents=[10, 20, 30]).export(file_type="stl")
 
 
-def request(path, *, contents=None, filename="synthetic.stl", params=None):
+def request(path, *, contents=None, filename="synthetic.stl", params=None, rate_retries=3):
     url = BASE_URL + path + ("?" + urlencode(params) if params else "")
     headers, body = {}, None
     if contents is not None:
@@ -32,14 +33,20 @@ def request(path, *, contents=None, filename="synthetic.stl", params=None):
                 + filename.encode() + b'"\r\nContent-Type: model/stl\r\n\r\n'
                 + contents + b'\r\n--mm005-boundary--\r\n')
         headers["Content-Type"] = "multipart/form-data; boundary=mm005-boundary"
-    try:
-        response = build_opener(ProxyHandler({})).open(Request(url, data=body, headers=headers), timeout=90)
-    except HTTPError as error:
-        response = error
-    with response:
-        payload = response.read()
-        value = json.loads(payload) if "application/json" in response.headers.get("Content-Type", "") else payload.decode()
-        return response.status, response.headers, value
+    for attempt in range(rate_retries + 1):
+        try:
+            response = build_opener(ProxyHandler({})).open(Request(url, data=body, headers=headers), timeout=90)
+        except HTTPError as error:
+            response = error
+        with response:
+            payload = response.read()
+            value = json.loads(payload) if "application/json" in response.headers.get("Content-Type", "") else payload.decode()
+            result = response.status, response.headers, value
+        if result[0] != 429 or attempt == rate_retries:
+            return result
+        # Test-driver pacing for MM-006's 10/minute estimate pool. The product
+        # UI still retries only manually; this bounded loop is not app behavior.
+        time.sleep(6.2)
 
 
 class TestNginxPublicAPI(unittest.TestCase):
@@ -103,6 +110,10 @@ class TestNginxPublicAPI(unittest.TestCase):
                     self.assertIsNone(result["pricing"])
 
     def test_controlled_errors_and_proxy_upload_limit(self):
+        # Nginx and ASGI must not decode a hidden endpoint at different depths.
+        for path in ("/api/%2565stimate", "/api/%2561nalyze", "/api/estimate%252f"):
+            status, _, _ = request(path, contents=b"")
+            self.assertEqual(status, 404, path)
         marker = "SYNTHETIC_PRIVATE_VALUE"
         for params, filename, expected in (({}, "part.obj", 400), ({"quantity": 0}, "part.stl", 400),
                                           ({"quantity": marker * 100}, "part.stl", 422),
@@ -127,7 +138,7 @@ class TestNginxPublicAPI(unittest.TestCase):
 
         def quote():
             barrier.wait(timeout=5)
-            return request("/api/estimate", contents=STL)
+            return request("/api/estimate", contents=STL, rate_retries=0)
 
         with ThreadPoolExecutor(max_workers=6) as executor:
             futures = [executor.submit(quote) for _ in range(6)]
@@ -137,9 +148,11 @@ class TestNginxPublicAPI(unittest.TestCase):
         self.assertIn(200, [status for status, _, _ in results])
         self.assertIn(503, [status for status, _, _ in results])
         for status, headers, result in results:
-            self.assertIn(status, (200, 503))
+            self.assertIn(status, (200, 429, 503))
             if status == 503:
                 self.assertEqual(headers["Retry-After"], "5")
+                self.assertEqual(set(result), {"detail"})
+            elif status == 429:
                 self.assertEqual(set(result), {"detail"})
             else:
                 self.assert_contract(result, EstimateResponse)

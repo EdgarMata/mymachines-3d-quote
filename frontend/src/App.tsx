@@ -171,7 +171,7 @@ function App() {
         const response = await fetch("/api/options");
 
         if (!response.ok) {
-          throw new Error(`Backend returned ${response.status}`);
+          throw new Error(await responseError(response, `Backend returned ${response.status}`));
         }
 
         const data: OptionsResponse = await response.json();

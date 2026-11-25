@@ -18,13 +18,26 @@ Use `docker compose up -d` for local development only, and inspect `docker compo
 ## Production principles
 `docker-compose.prod.yml` references GHCR images with required `QUOTE_IMAGE_TAG`. Prefer immutable commit tags to `latest`. Backend has no host port; frontend connects to the reverse proxy network. Initial runtime limits: backend 2 CPU / 4 GiB; frontend 0.5 CPU / 256 MiB; healthcheck `/options`, bounded JSON log rotation. Runtime resource limits do not constrain all build activity. Validate available resources before building on shared infrastructure.
 
+MM-006 also requires `NGINX_TRUSTED_PROXIES_FILE`: an absolute path to an
+operator-owned exact-IP allowlist outside this public repository. Production
+mounts it read-only and sets `REQUIRE_TRUSTED_PROXY=true`; empty trust prevents
+startup. Do not guess the NPM peer or trust a shared Docker subnet. See
+[Abuse protection](ABUSE_PROTECTION.md) before using production Compose.
+
 ## Private testing without publishing images
 Use a local, untracked Compose override on the deployment host to replace both image names with local `:internal` tags, add root build contexts and respective Dockerfiles, remove the frontend connection to the shared reverse proxy network using `networks: !override`, and bind frontend port 80 only to host loopback. Validate the merged configuration before building/starting. Access via SSH local forwarding. The internal application bridge is not necessarily an egress-denying network.
+
+For this **direct SSH-only** mode, the override must explicitly set the frontend
+environment `REQUIRE_TRUSTED_PROXY: "false"`. Use the empty/comment-only default
+trust file as below. This deliberately trusts no forwarded headers; users may
+share the tunnel's visible peer budget. Never reuse this exception unchanged
+behind public NPM.
 
 Example commands (only on the authorized test host, after checking context and approval):
 
 ```sh
 export QUOTE_IMAGE_TAG=internal
+export NGINX_TRUSTED_PROXIES_FILE="${PWD}/frontend/nginx-trusted-proxies.conf"
 docker compose -f docker-compose.prod.yml -f docker-compose.internal.yml config
 docker compose -f docker-compose.prod.yml -f docker-compose.internal.yml build backend
 docker compose -f docker-compose.prod.yml -f docker-compose.internal.yml build frontend
@@ -114,8 +127,8 @@ Slicer timeouts receive 504 after process cleanup. There is no application queue
 and no automatic retry loop. Backend admission happens before multipart parsing;
 Nginx request buffering still consumes proxy resources before forwarding uploads.
 Slow accepted uploads can occupy admission before geometry starts. Existing byte
-limits remain necessary; rate limiting remains pending and MM-004 adds the
-temporary-storage policy below.
+limits remain necessary; MM-006 adds ingress limits and MM-004 adds the
+temporary-storage policy below. Neither provides a total upload deadline.
 
 MM-003 verification (source-mounted Docker backend command above) includes actual
 short synthetic subprocess trees and real OrcaSlicer binary/ASCII quotes. UI error
@@ -148,7 +161,7 @@ extra services. Builds and real OrcaSlicer backend checks remain in the matrix.
 `calculateQuote` clears its busy state in `finally`; after a 503/504 the selected
 file remains and the Calculate quote button is available for a manual retry.
 
-Pending operational validation: slow-upload/abuse protection, a hard overall
+Pending operational validation: real-edge slow-upload/abuse behavior, a hard overall
 geometry deadline, process-local admission (one Uvicorn worker/replica), and
 representative load tests on the shared ARM64 deployment host. No VPS load test
 or deployment is implied by local test results.
@@ -234,3 +247,57 @@ See API_CONTRACTS.md for setup constraints and manual browser steps. Browser-con
 access was unavailable in that review, so visual/interactive functional approval
 remains pending. Public prices can still support inference of internal costs or
 margins; response allowlists prevent direct disclosure, not that inference.
+
+## Ingress limits and proxy identity (MM-006)
+
+Production is client → NPM → frontend Nginx → FastAPI. Configure NPM to
+**overwrite** X-Real-IP with its verified client address; mount only its actual
+immediate individual egress IPv4/IPv6 peers as `set_real_ip_from` directives.
+Frontend ignores untrusted header claims and replaces forwarded IP headers with
+the canonical address. The startup guard accepts individual literal IPs only
+(optional /32 or /128), not hostnames or broad networks. Trust also depends on
+the operator verifying that those peers and NPM header behavior are correct.
+Do not commit actual infrastructure addresses or access details.
+
+Lists/duplicate/ambiguous X-Real-IP values receive controlled 400; absent or
+invalid numeric literals keep the TCP peer budget. A changed NPM address is not
+automatically trusted: it collapses users into that peer budget, while a stale
+old allowlist entry could authorize a different container after address reuse.
+During approved recreation, keep public traffic closed and stop/isolate frontend,
+discover and verify the new exact peers, replace the private file removing old
+entries, then recreate frontend to rerun validation and load the list. Recreating
+is necessary after atomic single-file replacement because a live bind mount can
+retain the old inode. Verify two real clients and spoof handling before reopening
+traffic. See the full [trust-update procedure](ABUSE_PROTECTION.md#updating-trust-when-npm-is-recreated).
+
+`frontend/nginx.conf` is the policy source: analyze 30/min/IP burst 5, estimate
+10/min/IP burst 2 (shared with legacy upload/slice), options 60/min/IP burst 10,
+other API 60/min/IP burst 5; global 10/s burst 20. All use nodelay. Active complete
+API requests are capped at 5/IP and 20 globally; bodyless GET/HEAD health probes
+are exempt. Controlled JSON 429 is distinct from backend 503/Retry-After 5 and
+504. UI retries are manual. Change policy via a reviewed config rebuild/reload,
+not a backend environment variable.
+
+Body inactivity timeout is 30s, header timeout 10s and idle keepalive 15s. Keep
+51 MiB request buffering and automatic temporary-file removal enabled; 50 MiB
+STL, backend admission and slicer/proxy deadlines remain unchanged. NPM must align
+its body allowance, receive controls and upstream read timeout. If NPM buffers
+first, its own edge limits must protect resources before frontend sees uploads.
+Continuously slow uploads can remain active indefinitely; these settings are not
+an absolute deadline, disk quota, authentication or complete DDoS protection.
+
+After local image build, run the opt-in isolated native tests:
+
+```sh
+backend/tests/run_nginx_abuse_tests.sh
+```
+
+CI runs these on both existing native architecture runners. They include actual
+production-rate recovery plus separate shortened test-only timeouts/rates. Native
+startup cases cover valid/invalid IPv6, broad trust and directive injection.
+The runner names and removes both containers on ordinary failure/signals, preserves
+test exit codes and pulls no images; no new CI secrets/privileged modes are needed.
+The nine real-Orca Nginx smoke checks remain opt-in and use bounded test-only pacing
+on 429. Two external clients, IPv4/IPv6, spoof attempts, NAT, real NPM buffering
+and representative resource use still require later approved deployment tests.
+See [Abuse protection](ABUSE_PROTECTION.md) for the full audit and rollout checklist.
