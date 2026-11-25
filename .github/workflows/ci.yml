@@ -47,6 +47,20 @@ jobs:
       - name: Build Docker images
         run: docker compose build
 
+      - name: Generate backend SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: mymachines-3d-quote-backend:latest
+          format: spdx-json
+          artifact-name: backend-sbom-${{ matrix.arch }}.spdx.json
+
+      - name: Generate frontend SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: mymachines-3d-quote-frontend:latest
+          format: spdx-json
+          artifact-name: frontend-sbom-${{ matrix.arch }}.spdx.json
+
       - name: Verify OrcaSlicer CLI
         run: |
           docker compose run --rm --no-deps backend \
