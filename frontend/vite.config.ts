@@ -3,6 +3,13 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
+
+  build: {
+    license: {
+      fileName: "THIRD_PARTY_LICENSES.md",
+    },
+  },
+
   server: {
     proxy: {
       "/api": {
