@@ -33,6 +33,7 @@ from app.services.input_validation import (
 )
 from app.services.machine_selector import select_machine
 from app.services.pricing import calculate_pricing, load_pricing_config
+from app.services.commercial_config import get_commercial_config
 from app.services.slicer import slice_stl, validate_slicing_result
 from app.services.printing_config import (
     load_printing_config,
@@ -46,6 +47,8 @@ async def lifespan(app):
 
 
 api_settings = load_api_settings()
+# Validate and freeze the commercial snapshot before serving any HTTP request.
+get_commercial_config()
 legacy = APIRouter()
 app = FastAPI(
     title="MyMachines 3D Quote API",
@@ -101,20 +104,6 @@ app.add_middleware(
     allow_headers=["Content-Type", "Accept"],
 )
 
-MATERIALS = {
-    "PLA": {
-        "density_g_cm3": 1.24,
-        "cost_per_kg": 16.00,
-    },
-    "PETG": {
-        "density_g_cm3": 1.27,
-        "cost_per_kg": 22.00,
-    },
-    "ASA": {
-        "density_g_cm3": 1.07,
-        "cost_per_kg": 25.00,
-    },
-}
 
 
 @app.get("/", response_model=RootResponse)

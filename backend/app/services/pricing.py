@@ -1,33 +1,9 @@
-import json
-import os
 from dataclasses import dataclass
-from pathlib import Path
+import math
 
+from app.services.commercial_config import get_commercial_config
+from app.services.printing_config import load_printing_config
 
-DEFAULT_PROJECT_ROOT = (
-    Path.home()
-    / "Projetos"
-    / "mymachines-3d-quote"
-)
-
-PROJECT_ROOT = Path(
-    os.getenv(
-        "MYMACHINES_PROJECT_ROOT",
-        str(DEFAULT_PROJECT_ROOT),
-    )
-)
-
-PRICING_CONFIG_FILE = (
-    PROJECT_ROOT
-    / "config"
-    / "pricing.json"
-)
-
-MACHINE_COSTS_FILE = (
-    PROJECT_ROOT
-    / "config"
-    / "machine_costs.json"
-)
 
 @dataclass
 class PricingConfig:
@@ -51,106 +27,31 @@ class PricingConfig:
     minimum_order_eur: float
 
 
-def load_pricing_config(
-    machine_id: str | None = None,
-) -> PricingConfig:
 
-    if not PRICING_CONFIG_FILE.exists():
-        raise FileNotFoundError(
-            f"Pricing config not found: {PRICING_CONFIG_FILE}"
-        )
-
-    if not MACHINE_COSTS_FILE.exists():
-        raise FileNotFoundError(
-            f"Machine costs config not found: {MACHINE_COSTS_FILE}"
-        )
-
-    # Load general company pricing settings
-    data = json.loads(
-        PRICING_CONFIG_FILE.read_text(
-            encoding="utf-8"
-        )
-    )
-
-    # Load individual machine costs
-    machine_costs = json.loads(
-        MACHINE_COSTS_FILE.read_text(
-            encoding="utf-8"
-        )
-    )
-
-    # Preserve the configured default machine
+def load_pricing_config(machine_id: str | None = None) -> PricingConfig:
+    settings = get_commercial_config()
+    catalogue = load_printing_config()
     if machine_id is None:
-        from app.services.printing_config import load_printing_config
-
-        printing_config = load_printing_config()
-
-        machine_id = printing_config["default_machine"]
-
-    # Validate machine
-    if machine_id not in machine_costs["machines"]:
-        raise ValueError(
-            f"Machine costs not configured: {machine_id}"
-        )
-
-    machine = machine_costs["machines"][machine_id]
-
-    energy = data["energy"]
-    labour = data["labour"]
-    risk = data["risk"]
-    commercial = data["commercial"]
-
+        machine_id = catalogue["default_machine"]
+    if machine_id not in settings.machines:
+        raise ValueError("Machine costs are not configured.")
+    machine = settings.machines[machine_id]
     return PricingConfig(
-        machine_name=machine["name"],
-
-        machine_purchase_cost_eur=(
-            machine["purchase_cost_eur"]
-        ),
-
-        machine_residual_value_eur=(
-            machine["residual_value_eur"]
-        ),
-
-        machine_lifetime_hours=(
-            machine["lifetime_hours"]
-        ),
-
-        maintenance_cost_per_hour_eur=(
-            machine["maintenance_cost_per_hour_eur"]
-        ),
-
-        average_power_kw=(
-            machine["average_power_kw"]
-        ),
-
-        electricity_cost_per_kwh_eur=(
-            energy["electricity_cost_per_kwh_eur"]
-        ),
-
-        labour_cost_per_hour_eur=(
-            labour["cost_per_hour_eur"]
-        ),
-
-        setup_minutes=(
-            machine["setup_minutes"]
-        ),
-
-        postprocess_minutes_per_piece=(
-            machine["postprocess_minutes_per_piece"]
-        ),
-
-        failure_rate_percent=(
-            risk["failure_rate_percent"]
-        ),
-
-        target_margin_percent=(
-            commercial["target_margin_percent"]
-        ),
-
-        minimum_order_eur=(
-            commercial["minimum_order_eur"]
-        ),
+        machine_name=catalogue["machines"][machine_id]["pricing_name"],
+        machine_purchase_cost_eur=machine.purchase_cost_eur,
+        machine_residual_value_eur=machine.residual_value_eur,
+        machine_lifetime_hours=machine.lifetime_hours,
+        maintenance_cost_per_hour_eur=machine.maintenance_cost_per_hour_eur,
+        average_power_kw=machine.average_power_kw,
+        electricity_cost_per_kwh_eur=settings.energy.electricity_cost_per_kwh_eur,
+        labour_cost_per_hour_eur=settings.labour.cost_per_hour_eur,
+        setup_minutes=machine.setup_minutes,
+        postprocess_minutes_per_piece=machine.postprocess_minutes_per_piece,
+        failure_rate_percent=settings.risk.failure_rate_percent,
+        target_margin_percent=settings.commercial.target_margin_percent,
+        minimum_order_eur=settings.commercial.minimum_order_eur,
     )
+
 
 def calculate_pricing(
     *,
@@ -296,6 +197,20 @@ def calculate_pricing(
         expected_cost
         / (1 - margin)
     )
+
+    # Finite individual settings can still overflow when multiplied by hours,
+    # quantity or risk/margin factors. Reject before applying a minimum price
+    # or serializing any result, including internal costs and intermediate hours.
+    if not all(math.isfinite(value) for value in (
+        print_hours_each, total_print_hours, total_material_cost,
+        depreciable_value, depreciation_per_hour, depreciation_cost,
+        maintenance_cost, electricity_cost_per_hour, electricity_cost,
+        setup_hours, setup_cost, postprocess_hours, postprocess_cost,
+        failure_exposed_cost, fixed_labour_cost, production_cost,
+        expected_failure_exposed_cost, risk_cost, expected_cost,
+        selling_price_before_minimum, config.minimum_order_eur,
+    )):
+        raise ValueError("Pricing calculation produced non-finite results.")
 
     selling_price = max(
         selling_price_before_minimum,

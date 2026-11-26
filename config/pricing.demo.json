@@ -1,8 +1,22 @@
 {
+  "schema_version": 1,
+  "configuration_kind": "demonstration",
   "currency": "EUR",
+  "energy": {
+    "electricity_cost_per_kwh_eur": 0.25
+  },
+  "labour": {
+    "cost_per_hour_eur": 20.0
+  },
+  "risk": {
+    "failure_rate_percent": 8.0
+  },
+  "commercial": {
+    "target_margin_percent": 40.0,
+    "minimum_order_eur": 10.0
+  },
   "machines": {
     "my_mini_04": {
-      "name": "MyMini",
       "purchase_cost_eur": 450.0,
       "residual_value_eur": 50.0,
       "lifetime_hours": 6000,
@@ -12,7 +26,6 @@
       "postprocess_minutes_per_piece": 5
     },
     "prusa_mk3s_04": {
-      "name": "Prusa MK3S",
       "purchase_cost_eur": 900.0,
       "residual_value_eur": 100.0,
       "lifetime_hours": 6000,
@@ -22,7 +35,6 @@
       "postprocess_minutes_per_piece": 5
     },
     "my_cloner_04": {
-      "name": "MyCloner",
       "purchase_cost_eur": 900.0,
       "residual_value_eur": 100.0,
       "lifetime_hours": 6000,
@@ -32,7 +44,6 @@
       "postprocess_minutes_per_piece": 5
     },
     "my_corexy_04": {
-      "name": "MyCoreXY",
       "purchase_cost_eur": 1800.0,
       "residual_value_eur": 200.0,
       "lifetime_hours": 6000,
@@ -42,7 +53,6 @@
       "postprocess_minutes_per_piece": 7
     },
     "my_giga1m3": {
-      "name": "MyGiga1M3",
       "purchase_cost_eur": 15000.0,
       "residual_value_eur": 1500.0,
       "lifetime_hours": 6000,
@@ -50,6 +60,14 @@
       "average_power_kw": 2.5,
       "setup_minutes": 30,
       "postprocess_minutes_per_piece": 15
+    }
+  },
+  "materials": {
+    "PLA": {
+      "cost_per_kg_eur": 16.0
+    },
+    "PETG": {
+      "cost_per_kg_eur": 20.0
     }
   }
 }

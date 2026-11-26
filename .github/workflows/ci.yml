@@ -42,7 +42,13 @@ jobs:
           docker info --format '{{.Architecture}}'
 
       - name: Validate Docker Compose configuration
-        run: docker compose config --quiet
+        run: |
+          docker compose config --quiet
+          # Syntax only: these public paths do not authorize production startup.
+          QUOTE_IMAGE_TAG=ci-check \
+          NGINX_TRUSTED_PROXIES_FILE="${PWD}/frontend/nginx-trusted-proxies.conf" \
+          PRICING_CONFIG_HOST_PATH="${PWD}/config/pricing.demo.json" \
+            docker compose -f docker-compose.prod.yml config --quiet
 
       - name: Build Docker images
         run: docker compose build
@@ -55,6 +61,9 @@ jobs:
 
       - name: Test native Nginx abuse protection and trusted proxy chain
         run: backend/tests/run_nginx_abuse_tests.sh
+
+      - name: Test private configuration isolation, HTTP contracts and price rollback
+        run: python3 backend/tests/run_commercial_checks.py
 
       - name: Generate backend SBOM
         uses: anchore/sbom-action@v0

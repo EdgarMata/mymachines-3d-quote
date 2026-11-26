@@ -1,5 +1,6 @@
 
 import re
+import json
 import math
 import os
 import shlex
@@ -8,6 +9,7 @@ from pathlib import Path
 from app.services.input_validation import InputValidationError, validate_printing_options
 from app.services.slicer_process import run_slicer_process
 from app.services.temp_storage import workspace, slicer_environment
+from app.services.commercial_config import get_commercial_config
 from app.services.printing_config import (
     get_filament_profile,
     get_process_profile,
@@ -231,6 +233,15 @@ def slice_stl(
     with workspace(PROJECT_ROOT, "slicer", directory_factory=tempfile.TemporaryDirectory) as tmp_dir:
         output_dir = Path(tmp_dir)
 
+        # Keep technical profiles immutable and preserve OrcaSlicer's own cost
+        # calculation/rounding. Private prices exist only in this owned workspace.
+        runtime_filament = output_dir / "filament.json"
+        filament_settings = json.loads(filament_profile.read_text(encoding="utf-8"))
+        filament_settings["filament_cost"] = [str(
+            get_commercial_config().materials[material].cost_per_kg_eur
+        )]
+        runtime_filament.write_text(json.dumps(filament_settings), encoding="utf-8")
+
         command = [
             *ORCA_COMMAND,
 
@@ -241,7 +252,7 @@ def slice_stl(
             ),
 
             "--load-filaments",
-            str(filament_profile),
+            str(runtime_filament),
 
             "--slice",
             "0",

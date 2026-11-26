@@ -12,9 +12,18 @@ services:
 
     environment:
       APP_ENV: production
+      PRICING_CONFIG_PATH: /run/mymachines/pricing.json
       MYMACHINES_PROJECT_ROOT: /project
       ORCA_COMMAND: /opt/orca/AppRun
       ORCA_PRUSA_PRINTER_PROFILE: /project/profiles/printers/prusa_mk3s_0.4.json
+
+    volumes:
+      - type: bind
+        source: ${PRICING_CONFIG_HOST_PATH:?Set an operator-owned commercial configuration file}
+        target: /run/mymachines/pricing.json
+        read_only: true
+        bind:
+          create_host_path: false
 
     networks:
       - quote_internal

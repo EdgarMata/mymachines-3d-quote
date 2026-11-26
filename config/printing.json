@@ -39,6 +39,7 @@
 
   "machines": {
     "my_mini_04": {
+      "pricing_name": "MyMini",
       "label": "MyMini - 0.4 mm",
       "nozzle_diameter_mm": 0.4,
       "build_volume_mm": {
@@ -52,6 +53,7 @@
     },
 
     "prusa_mk3s_04": {
+      "pricing_name": "Prusa MK3S",
       "label": "Prusa MK3S - 0.4 mm",
       "nozzle_diameter_mm": 0.4,
       "build_volume_mm": {
@@ -66,6 +68,7 @@
     },
 
     "my_cloner_04": {
+      "pricing_name": "MyCloner",
       "label": "MyCloner - 0.4 mm",
       "nozzle_diameter_mm": 0.4,
       "build_volume_mm": {
@@ -80,6 +83,7 @@
     },
 
     "my_corexy_04": {
+      "pricing_name": "MyCoreXY",
       "label": "MyCoreXY - 0.4 mm",
       "nozzle_diameter_mm": 0.4,
       "build_volume_mm": {
@@ -93,6 +97,7 @@
     },
 
     "my_giga1m3": {
+      "pricing_name": "MyGiga1M3",
       "label": "MyGiga1M3",
       "nozzle_diameter_mm": 0.8,
       "build_volume_mm": {

@@ -135,11 +135,16 @@ The quotation engine uses configurable JSON files.
 | File                        | Purpose                                       |
 | --------------------------- | --------------------------------------------- |
 | `config/printing.json`      | Printers, materials and print quality options |
-| `config/pricing.json`       | General pricing parameters                    |
-| `config/machine_costs.json` | Machine-specific production costs             |
+| `config/pricing.demo.json`  | Complete demonstration commercial configuration |
 | `profiles/`                 | Slicer configuration profiles                 |
 
-The included cost parameters are illustrative and should be adapted to each business before commercial use.
+The included cost parameters are illustrative and are not approved commercial
+prices. Development uses the complete demo by default. Production requires an
+explicit external JSON selected with `PRICING_CONFIG_PATH`, marked `private`,
+validated at startup and mounted read-only; there is no demo fallback. Prices
+can be updated by controlled backend recreation without rebuilding images. See
+[Commercial configuration](docs/COMMERCIAL_CONFIGURATION.md) for fields, units,
+validation, migration and private deployment/backup procedures.
 
 Backend safety limits default to 50 MiB per STL, 1,000,000 input triangles and
 1–100 units per automatic estimate. STL geometry and printing parameters are

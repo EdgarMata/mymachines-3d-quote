@@ -252,7 +252,9 @@ An attack can fill global budgets and affect legitimate clients. Health probes
 remain an intentional light exception. Outer buffering, disk limits, bandwidth,
 and real NPM/VPS load validation remain separate concerns. This is neither
 authentication nor absolute DDoS protection. Browser visual validation remains
-pending from MM-005; no browser test is claimed here. MM-007 is not implemented.
+pending from MM-005; no browser test is claimed here. Subsequent private
+commercial configuration is documented in [MM-007](COMMERCIAL_CONFIGURATION.md);
+it does not change these ingress controls.
 
 Native semantics: [limit_req](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html),
 [limit_conn](https://nginx.org/en/docs/http/ngx_http_limit_conn_module.html),

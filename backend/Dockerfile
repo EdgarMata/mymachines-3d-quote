@@ -23,22 +23,6 @@ COPY backend/requirements.txt /app/requirements.txt
 
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-COPY backend/app /app/app
-
-# Application configuration and slicer profiles
-COPY config /project/config
-COPY profiles /project/profiles
-
-# Project license and third-party notices
-COPY LICENSE /project/LICENSE
-COPY THIRD_PARTY_NOTICES.md /project/THIRD_PARTY_NOTICES.md
-COPY third_party /project/third_party
-
-RUN mkdir -p \
-    /project/tmp/uploads \
-    /project/tmp/analysis \
-    /project/tmp/slicer
-
 # OrcaSlicer 2.4.2 - architecture-specific official AppImage
 ARG ORCA_VERSION=2.4.2
 
@@ -66,6 +50,22 @@ RUN set -eux; \
     /tmp/OrcaSlicer.AppImage --appimage-extract; \
     mv /opt/squashfs-root /opt/orca; \
     rm /tmp/OrcaSlicer.AppImage
+
+COPY backend/app /app/app
+
+# Application configuration and slicer profiles
+COPY config/printing.json config/pricing.demo.json /project/config/
+COPY profiles /project/profiles
+
+# Project license and third-party notices
+COPY LICENSE /project/LICENSE
+COPY THIRD_PARTY_NOTICES.md /project/THIRD_PARTY_NOTICES.md
+COPY third_party /project/third_party
+
+RUN mkdir -p \
+    /project/tmp/uploads \
+    /project/tmp/analysis \
+    /project/tmp/slicer
 
 ENV PYTHONPATH=/app
 ENV MYMACHINES_PROJECT_ROOT=/project

@@ -30,7 +30,7 @@ Select the smallest eligible compatible machine, using oriented dimensions and t
 Materials: PLA, PETG. Quality: Draft 0.30 mm, Standard 0.20 mm, Fine 0.12 mm. Defaults: Prusa MK3S, PLA, Standard. Enabled in configuration is not proof of physical availability or production qualification.
 
 ## Pricing
-The existing pricing module is the authoritative calculation; do not infer or change its formulas from this document. Existing tests cover reference pricing, setup/post-processing labour and failure-exposed costs. Public pricing includes only machine, quantity, selling price and minimum-order flag. MM-005 filters slicing and machine/orientation data through nested public models without changing those calculations. Commercial pricing must be loaded from private configuration outside the public repository; the MM-007 private configuration mechanism remains pending.
+The existing pricing module is the authoritative calculation; do not infer or change its formulas from this document. Existing tests cover reference pricing, setup/post-processing labour and failure-exposed costs. Public pricing includes only machine, quantity, selling price and minimum-order flag. MM-005 filters slicing and machine/orientation data through nested public models without changing those calculations. MM-007 loads a validated external commercial snapshot in production; development retains the complete public demonstration configuration. See [Commercial configuration](COMMERCIAL_CONFIGURATION.md) for the parameter inventory, units, startup gate and update/rollback procedure. The formulas and rounding are unchanged; an explicit finite-result guard rejects arithmetic overflow before returning any quote.
 
 ## Security boundary
 The API and slicer process untrusted files. File extension alone is insufficient. TemporaryDirectory handles normal cleanup; MM-004 adds lock-aware recovery of recognized abandoned workspaces and contains helper output. Heavy synchronous pipelines run in a bounded thread executor; ASGI admission limits active uploads and work before multipart parsing. Never rely on container CPU/RAM limits alone to prevent denial of service.
@@ -247,3 +247,20 @@ test-only intervals in isolated Docker containers. See
 [Abuse protection](ABUSE_PROTECTION.md) for exact semantics, deployment settings,
 test commands and limitations. No Python limiter, dependency or pricing change
 is introduced.
+
+## MM-007 — commercial configuration boundary
+
+`commercial_config.py` validates one strict JSON snapshot before HTTP startup.
+Production requires an explicit absolute external path, a private marker and a
+complete record outside application roots; invalid selections never use demo
+fallback. Development defaults to `config/pricing.demo.json`. Machine public
+pricing names stay in the technical catalogue; densities/printing settings and
+selection criteria remain unchanged.
+
+Pricing reads the snapshot, while slicing copies the unchanged technical filament
+profile into the MM-004 workspace and overrides only filament_cost. Orca retains
+its cost computation and rounding; the existing pricing formula consumes that
+result. Temporary runtime profiles contain private cost data and follow existing
+cleanup/recovery. Private input is a backend-only read-only runtime mount, never
+a build input, frontend setting or HTTP response model. No dynamic reload, new
+cost component, dependency or commercial quantity rule is introduced.

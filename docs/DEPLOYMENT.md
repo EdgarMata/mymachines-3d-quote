@@ -24,6 +24,12 @@ mounts it read-only and sets `REQUIRE_TRUSTED_PROXY=true`; empty trust prevents
 startup. Do not guess the NPM peer or trust a shared Docker subnet. See
 [Abuse protection](ABUSE_PROTECTION.md) before using production Compose.
 
+MM-007 also requires `PRICING_CONFIG_HOST_PATH`, the operator's complete private
+commercial JSON outside the checkout. Backend mounts it read-only at
+`/run/mymachines/pricing.json`, selects it with PRICING_CONFIG_PATH and refuses
+missing/invalid/bundled-demo configuration. Existing CPU/RAM limits and one worker
+remain unchanged. See [Commercial configuration](COMMERCIAL_CONFIGURATION.md).
+
 ## Private testing without publishing images
 Use a local, untracked Compose override on the deployment host to replace both image names with local `:internal` tags, add root build contexts and respective Dockerfiles, remove the frontend connection to the shared reverse proxy network using `networks: !override`, and bind frontend port 80 only to host loopback. Validate the merged configuration before building/starting. Access via SSH local forwarding. The internal application bridge is not necessarily an egress-denying network.
 
@@ -38,6 +44,7 @@ Example commands (only on the authorized test host, after checking context and a
 ```sh
 export QUOTE_IMAGE_TAG=internal
 export NGINX_TRUSTED_PROXIES_FILE="${PWD}/frontend/nginx-trusted-proxies.conf"
+export PRICING_CONFIG_HOST_PATH=/srv/my-instant-quote-private/pricing.json
 docker compose -f docker-compose.prod.yml -f docker-compose.internal.yml config
 docker compose -f docker-compose.prod.yml -f docker-compose.internal.yml build backend
 docker compose -f docker-compose.prod.yml -f docker-compose.internal.yml build frontend
@@ -46,6 +53,11 @@ docker compose -f docker-compose.prod.yml -f docker-compose.internal.yml ps
 ```
 
 Check frontend HTTP status, `/api/options`, `/analyze`, `/estimate`, logs, resource usage and a representative quote. Never run deployment commands without checking the target host. Host-specific access details belong in private operational notes, not this repository.
+
+The pricing path above is an illustrative operator location, not an existing VPS
+file. Internal production-mode testing still requires an explicitly selected
+external fixture marked private; use synthetic data for tests and follow the
+commercial-configuration creation/validation procedure before startup.
 
 ## Public deployment gate
 Not approved as of 2026-11-25. Complete security, pricing/privacy, redistribution and operational checks. Preserve unrelated services. Record deployed commit and image digests, keep previous known-good version available, and test rollback. Do not change DNS or reverse proxy routing before explicit approval.
@@ -239,7 +251,8 @@ See [API contracts](API_CONTRACTS.md) for the full response/error allowlists and
 diagnostic policy. New API diagnostics omit payloads and raw exception text;
 standard server/proxy access logs can still include client IPs/query strings.
 Review access-log retention/redaction separately before public deployment. Private
-commercial configuration is still MM-007, not implemented by these settings.
+commercial configuration is handled separately by
+[MM-007](COMMERCIAL_CONFIGURATION.md), not by public API settings.
 
 MM-005 final review includes nine opt-in local HTTP checks through Nginx using
 `backend/tests/nginx_smoke.py`, covering real slicing and production route defaults.

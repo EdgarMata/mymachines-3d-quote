@@ -15,6 +15,7 @@ filename. The three application buckets are `tmp/uploads`, `tmp/analysis` and
 | Legacy `/slice` original STL | `tmp/uploads/mmquote-v1-<random>/original.stl` | Existing `TemporaryDirectory` cleanup on worker exit | Recoverable owned directory |
 | `/estimate` oriented STL | `tmp/uploads/mmquote-v1-<random>/oriented.stl` | Same | Same |
 | `/analyze` oriented STL | `tmp/analysis/mmquote-v1-<random>/oriented.stl` | Same | Same |
+| MM-007 runtime filament profile with private material cost | `tmp/slicer/mmquote-v1-<random>/filament.json` | Removed with the owned workspace after actual worker/process completion | Recoverable orphan; inherited locks protect active use |
 | OrcaSlicer G-code, JSON and other outputs | `tmp/slicer/mmquote-v1-<random>/` | Same, after process-group termination/reaping and statistics extraction | Same; inherited locks protect a surviving slicer |
 | Slicer home/config/cache/data/runtime/system-temp writes | Private `home`, `config`, `cache`, `data`, `runtime`, `system-tmp` subdirectories of its output workspace | Removed with the slicer workspace | Same |
 | Slicer stdout/stderr | Bounded in-memory tails, 1 MiB per stream from MM-003 | Released after internal handling; no new persistent log file | Process memory is released |
@@ -169,3 +170,9 @@ Final-review tests also exercise pre-marker/pre-lock creation, short metadata
 writes, marker replacement before locking, descriptor release, repeated app
 lifespans, event-loop responsiveness during a stalled sweep and startup recovery
 permission failures. These tests preserve the 109 pre-review backend checks.
+
+MM-007's external commercial JSON is persistent operator-owned configuration,
+not temporary input and never a janitor target. Only the per-operation filament
+copy contains its selected material price; it is subject to the same permission,
+crash/lock/retention and non-secure-erasure limits above. See
+[Commercial configuration](COMMERCIAL_CONFIGURATION.md) for its privacy boundary.

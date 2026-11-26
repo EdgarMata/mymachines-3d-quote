@@ -188,7 +188,9 @@ are intentional disclosures needed by the current viewer/quote flow. Compatibili
 and review outcomes can imply availability; removing raw operational flags cannot
 hide that necessary behavior. Public-labelled configuration fields must contain
 public data. Example repository costs remain demonstration data; private
-commercial configuration separation is MM-007, not provided by these schemas.
+commercial configuration separation is [MM-007](COMMERCIAL_CONFIGURATION.md),
+not provided by these schemas. Its private snapshot and per-operation filament
+cost overrides are not public response models; final selling prices remain public.
 No claim is made about arbitrary data placed in a deliberately public label.
 Filtering prevents direct disclosure of internal cost fields; it does not prevent
 inference of costs, margins or pricing parameters by comparing public prices

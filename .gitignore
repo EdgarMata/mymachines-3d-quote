@@ -31,6 +31,9 @@ secrets/
 config/*.local.json
 config/*.private.json
 config/private/
+**/*.private.json
+**/*.local.json
+private/
 
 # Temporary application data
 uploads/

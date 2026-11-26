@@ -19,6 +19,7 @@ from app.api_config import load_api_settings
 from app.api_models import ErrorResponse, HealthResponse, RootResponse
 from app.services.printing_config import load_printing_config
 from test_processing import STL
+from commercial_fixtures import write_external_config
 
 SECRET = "SYNTHETIC_PRIVATE_SENTINEL /srv/private/model.stl G1 X99 token=example"
 FORBIDDEN = {"material_cost_eur", "cost_per_kg", "costs", "rates", "internal", "summary",
@@ -285,7 +286,7 @@ class TestPublicContracts(unittest.TestCase):
 class TestPublicSurfaceSettings(unittest.TestCase):
     def settings_environment(self, **overrides):
         result = dict(os.environ)
-        for name in ("APP_ENV", "ENABLE_LEGACY_ENDPOINTS", "ENABLE_API_DOCS", "CORS_ALLOWED_ORIGINS"):
+        for name in ("APP_ENV", "ENABLE_LEGACY_ENDPOINTS", "ENABLE_API_DOCS", "CORS_ALLOWED_ORIGINS", "PRICING_CONFIG_PATH"):
             result.pop(name, None)
         return {**result, **overrides}
 
@@ -314,8 +315,11 @@ finally:
     lease.finish_request()
 print(json.dumps(result))
 """
-        process = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
-                                 env=self.settings_environment(**overrides), timeout=10, check=True)
+        with tempfile.TemporaryDirectory() as directory:
+            path = write_external_config(directory)
+            process = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                                     env=self.settings_environment(PRICING_CONFIG_PATH=str(path), **overrides),
+                                     timeout=10, check=True)
         return json.loads(process.stdout)
 
     def test_production_defaults_disable_legacy_docs_and_cross_origin_access(self):
