@@ -64,6 +64,17 @@ class TestNginxPublicAPI(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn("Calculate quote", javascript)
 
+    def test_public_static_assets_are_readable(self):
+        for path, marker in (("/favicon.svg", "<svg"), ("/icons.svg", "<svg"),
+                             ("/LICENSE", "GNU AFFERO GENERAL PUBLIC LICENSE"),
+                             ("/THIRD_PARTY_NOTICES.md", "Third-Party")):
+            with self.subTest(path=path):
+                status, _, contents = request(path, rate_retries=0)
+                self.assertEqual(status, 200, path)
+                self.assertIn(marker, contents, path)
+                # A missing asset served through the SPA fallback is not success.
+                self.assertNotIn('<div id="root">', contents, path)
+
     def test_options_and_health(self):
         for path, model in (("/api/", RootResponse), ("/api/health", HealthResponse), ("/api/options", OptionsResponse)):
             status, _, result = request(path)

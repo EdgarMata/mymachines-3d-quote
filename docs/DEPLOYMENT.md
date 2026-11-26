@@ -30,6 +30,16 @@ commercial JSON outside the checkout. Backend mounts it read-only at
 missing/invalid/bundled-demo configuration. Existing CPU/RAM limits and one worker
 remain unchanged. See [Commercial configuration](COMMERCIAL_CONFIGURATION.md).
 
+The frontend image normalizes regular files to 0644 and directories to 0755
+inside `/usr/share/nginx/html`, after copying the bundle and public notices.
+This prevents restrictive source-file modes from causing 403 responses for
+unprivileged Nginx workers. Ownership remains root; workers gain no write access.
+The normalization does not follow symlinks or touch Nginx configuration,
+entrypoint scripts, backend files or external private configuration. The HTTP
+smoke suite checks both SVG assets and the project license/notices in the built
+image, including content checks to reject a misleading SPA fallback. The existing
+native AMD64/ARM64 CI driver runs this regression without workflow changes.
+
 ## Private testing without publishing images
 For the prepared MM-008B sequence, use the
 [private ARM64 runbook](MM008B_PRIVATE_VALIDATION.md): installed-version capture,

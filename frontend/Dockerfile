@@ -32,6 +32,11 @@ COPY --from=build /app/dist /usr/share/nginx/html
 COPY LICENSE /usr/share/nginx/html/LICENSE
 COPY THIRD_PARTY_NOTICES.md /usr/share/nginx/html/THIRD_PARTY_NOTICES.md
 
+# COPY and Vite's public-directory copy preserve restrictive source modes.
+# Normalize only the public document root; workers need read/traverse, not write.
+RUN find /usr/share/nginx/html -type d -exec chmod 0755 {} + \
+    && find /usr/share/nginx/html -type f -exec chmod 0644 {} +
+
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
