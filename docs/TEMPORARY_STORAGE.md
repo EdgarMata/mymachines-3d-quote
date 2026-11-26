@@ -176,3 +176,10 @@ not temporary input and never a janitor target. Only the per-operation filament
 copy contains its selected material price; it is subject to the same permission,
 crash/lock/retention and non-secure-erasure limits above. See
 [Commercial configuration](COMMERCIAL_CONFIGURATION.md) for its privacy boundary.
+
+MM-008A disk-exhaustion injection found that a failed Trimesh filename export
+could leave an unlinked STL descriptor open until cyclic garbage collection.
+Orientation now owns the binary output stream with a context manager and passes
+that stream to the unchanged STL exporter. Write failures close it before
+workspace cleanup; error recovery does not depend on GC. This does not change
+geometry transforms, file format, normal ownership/locks or secure-erasure limits.

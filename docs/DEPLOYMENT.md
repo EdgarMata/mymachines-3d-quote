@@ -31,6 +31,12 @@ missing/invalid/bundled-demo configuration. Existing CPU/RAM limits and one work
 remain unchanged. See [Commercial configuration](COMMERCIAL_CONFIGURATION.md).
 
 ## Private testing without publishing images
+For the prepared MM-008B sequence, use the
+[private ARM64 runbook](MM008B_PRIVATE_VALIDATION.md): installed-version capture,
+shared-service baseline, preserved images/configuration, native local builds,
+quote-only recreation, SSH/browser checks, monitored high-cost cases and rollback.
+It is documentation only; deployment and its test window require separate approval.
+
 Use a local, untracked Compose override on the deployment host to replace both image names with local `:internal` tags, add root build contexts and respective Dockerfiles, remove the frontend connection to the shared reverse proxy network using `networks: !override`, and bind frontend port 80 only to host loopback. Validate the merged configuration before building/starting. Access via SSH local forwarding. The internal application bridge is not necessarily an egress-denying network.
 
 For this **direct SSH-only** mode, the override must explicitly set the frontend

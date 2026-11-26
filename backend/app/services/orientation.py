@@ -107,10 +107,13 @@ def orient_mesh(
         exist_ok=True,
     )
 
-    mesh.export(
-        output_path,
-        file_type="stl",
-    )
+    # Own the descriptor: a failed third-party filename export can otherwise
+    # keep an unlinked STL consuming disk space until cyclic garbage collection.
+    with output_path.open("wb") as stream:
+        mesh.export(
+            stream,
+            file_type="stl",
+        )
 
     return {
         "status": "oriented",

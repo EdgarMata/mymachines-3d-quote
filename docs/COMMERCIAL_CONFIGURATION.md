@@ -244,4 +244,5 @@ The same checks run on both existing native AMD64/ARM64 CI jobs. SBOMs describe
 images containing demo inputs only. The manual publication workflow builds from
 the same restricted context and receives no private pricing mount/build argument;
 it remains unexecuted. Local verification does not establish new native CI or
-real deployment/browser approval. MM-008 is not started.
+real deployment/browser approval. Subsequent opt-in local validation is documented
+in [MM-008A](LOAD_AND_RESILIENCE_TESTING.md); it does not authorize deployment.

@@ -167,6 +167,11 @@ header replacement. See [Abuse protection](docs/ABUSE_PROTECTION.md) before
 configuring production or SSH-only internal access. Continuously slow uploads
 and distributed attacks still require edge and operational controls.
 
+Bounded local load and resilience validation is opt-in and remains separate from
+ordinary CI. See [Load and resilience testing](docs/LOAD_AND_RESILIENCE_TESTING.md)
+for execution, private metrics, safety limits and the future approved ARM64
+validation procedure. Local results do not approve public exposure.
+
 ## Project Structure
 
 ```text
