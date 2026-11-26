@@ -16,7 +16,12 @@ import sys
 import threading
 import time
 import unittest
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+
+CONNECTION_PORT = 18083
+BUFFERED_CONNECTION_PORT = 18084
 
 
 def prepare(directory):
@@ -36,6 +41,20 @@ def prepare(directory):
     fast = fast.replace("client_header_timeout 10s", "client_header_timeout 2s")
     fast = fast.replace("keepalive_timeout 15s", "keepalive_timeout 2s")
     fast = fast.replace("proxy_read_timeout 90s", "proxy_read_timeout 300ms")
+    # Test active-request admission independently of rate credits. Retain the
+    # production connection counts/keys/timeouts, in separate shared zones.
+    # Stream this fixture's bodies so the synthetic upstream can acknowledge
+    # real admission; 100 Continue alone can also precede a final rejection.
+    connection_zones = "\n".join(line for line in maps.splitlines() if line.startswith("limit_conn_zone"))
+    connection_zones = connection_zones.replace("zone=", "zone=connection_test_")
+    connections = re.sub(r"^\s*limit_req zone=.*;", "", server, flags=re.MULTILINE)
+    connections = connections.replace("limit_conn api_connections", "limit_conn connection_test_api_connections")
+    connections = connections.replace("limit_conn global_connections", "limit_conn connection_test_global_connections")
+    connections = connections.replace("listen 80;", f"listen {CONNECTION_PORT};")
+    connections = connections.replace("listen [::]:80;", f"listen [::]:{CONNECTION_PORT};")
+    connections = connections.replace("proxy_request_buffering on", "proxy_request_buffering off")
+    buffered_connections = connections.replace(str(CONNECTION_PORT), str(BUFFERED_CONNECTION_PORT))
+    buffered_connections = buffered_connections.replace("proxy_request_buffering off", "proxy_request_buffering on")
     proxies = ""
     for port, target, peer in ((8081, 80, "127.0.0.2"), (18081, 18080, "127.0.0.2"), (18082, 18080, "127.0.0.4")):
         proxies += f"""
@@ -53,17 +72,39 @@ server {{
 """
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / "default.conf").write_text(config + "\n" + fast_zones + "\nserver {" + fast + proxies)
+    diagnostics = '''log_format abuse_test '$msec $remote_addr:$remote_port "$request" '
+        'status=$status rate=$limit_req_status connections=$limit_conn_status duration=$request_time';
+access_log /dev/stdout abuse_test;
+error_log /dev/stderr info;
+'''
+    (directory / "default.conf").write_text(diagnostics + config + "\n" + fast_zones + "\nserver {" + fast
+        + "\n" + connection_zones + "\nserver {" + connections
+        + "\nserver {" + buffered_connections + proxies)
     (directory / "trusted.conf").write_text("set_real_ip_from 127.0.0.2;\n")
 
 
 class Upstream(BaseHTTPRequestHandler):
+    active_condition = threading.Condition()
+    active_uploads = set()
+
     def log_message(self, *args):
         pass
 
     def respond(self):
         length = int(self.headers.get("Content-Length", "0"))
-        self.rfile.read(length)
+        token = self.headers.get("X-Test-Upload")
+        if token and self.rfile.read(1) == b"x":
+            with self.active_condition:
+                self.active_uploads.add(token)
+                self.active_condition.notify_all()
+            try:
+                self.rfile.read(length - 1)
+            finally:
+                with self.active_condition:
+                    self.active_uploads.remove(token)
+                    self.active_condition.notify_all()
+        else:
+            self.rfile.read(length)
         status = 503 if self.path.startswith("/fixture503") else 504 if self.path.startswith("/fixture504") else 200
         if self.path == "/estimate/":
             status = 307
@@ -113,6 +154,9 @@ def request(path="options", *, ip="127.0.0.10", port=18080, headers=None, ipv6=F
 
 
 class TestAbuseProtection(unittest.TestCase):
+    def setUp(self):
+        self.held_uploads = []
+
     @classmethod
     def setUpClass(cls):
         cls.upstream = ThreadingHTTPServer(("127.0.0.1", 8000), Upstream)
@@ -135,9 +179,9 @@ class TestAbuseProtection(unittest.TestCase):
         cls.upstream.server_close()
         cls.thread.join()
 
-    def assert_429(self, response):
+    def assert_429(self, response, *, context=None):
         status, headers, value = response
-        self.assertEqual(status, 429, response)
+        self.assertEqual(status, 429, response if context is None else {"response": response, "context": context})
         self.assertEqual(headers["Content-Type"], "application/json")
         self.assertEqual(value, {"detail": "Too many requests. Please wait a moment and try again."})
         self.assertNotIn("Retry-After", headers)
@@ -250,40 +294,111 @@ class TestAbuseProtection(unittest.TestCase):
             self.assertEqual(result[2]["client"], "::1")
             self.assertEqual(result[2]["xff"], "::1")
 
-    def hold(self, ip):
-        connection = socket.create_connection(("127.0.0.1", 18080), timeout=6, source_address=(ip, 0))
+    def hold(self, ip, *, port=18080):
+        started = time.monotonic()
+        token = uuid.uuid4().hex
+        connection = socket.create_connection(("127.0.0.1", port), timeout=6, source_address=(ip, 0))
         self.addCleanup(connection.close)
+        observation = {"ip": ip, "port": connection.getsockname()[1], "token": token}
+        self.held_uploads.append(observation)
         connection.sendall(b"POST /api/hold HTTP/1.1\r\nHost: local\r\nContent-Length: 1000\r\n"
-                           b"Expect: 100-continue\r\n\r\n")
+                           b"Expect: 100-continue\r\nConnection: close\r\n" +
+                           f"X-Test-Upload: {token}\r\n\r\n".encode())
         response = b""
         while b"\r\n\r\n" not in response:
             chunk = connection.recv(4096)
             self.assertTrue(chunk, response)
             response += chunk
-        self.assertIn(b" 100 Continue\r\n", response)
+            self.assertLessEqual(len(response), 8192, "Unexpected hold response size.")
+        observation["response"] = response.decode(errors="replace")
+        self.assertEqual(response, b"HTTP/1.1 100 Continue\r\n\r\n", observation)
         connection.sendall(b"x")
+        if port == CONNECTION_PORT:
+            with Upstream.active_condition:
+                admitted = Upstream.active_condition.wait_for(lambda: token in Upstream.active_uploads, timeout=5)
+            observation["admission_seconds"] = time.monotonic() - started
+            if not admitted:
+                observation["pending_response"] = self.pending_response(connection)
+            self.assertTrue(admitted, {"message": "No upstream admission acknowledgement", "holds": self.held_uploads})
         return connection
 
-    def test_five_active_connections_and_release_health_exemption(self):
-        connections = [self.hold("127.0.0.31") for _ in range(5)]
-        self.assert_429(request(ip="127.0.0.31"))
-        self.assertEqual(request("health", ip="127.0.0.31")[0], 200)
-        self.assert_429(request("health", ip="127.0.0.31", method="POST"))
-        self.assert_429(request("health", ip="127.0.0.31", headers={"Content-Length": "1"}))
-        self.assertEqual(request(ip="127.0.0.32")[0], 200)
-        for connection in connections:
-            connection.close()
+    def pending_response(self, connection):
+        previous_timeout = connection.gettimeout()
+        try:
+            # MSG_DONTWAIT alone does not bypass Python's positive-timeout select.
+            connection.setblocking(False)
+            return connection.recv(8192, socket.MSG_PEEK).decode(errors="replace")
+        except BlockingIOError:
+            return None
+        finally:
+            connection.settimeout(previous_timeout)
+
+    def release_uploads(self, connections):
+        # Half-close each incomplete upload, then observe the server's EOF.
+        # A local close() alone does not acknowledge Nginx request cleanup.
         deadline = time.monotonic() + 3
-        while request(ip="127.0.0.31")[0] != 200:
-            self.assertLess(time.monotonic(), deadline, "Closed uploads did not release capacity.")
-            time.sleep(0.05)
+        for connection in connections:
+            connection.shutdown(socket.SHUT_WR)
+        for connection in connections:
+            response = b""
+            while True:
+                self.assertLess(time.monotonic(), deadline, "Closed uploads did not release capacity.")
+                connection.settimeout(max(.001, deadline - time.monotonic()))
+                chunk = connection.recv(4096)
+                if not chunk:
+                    break
+                response += chunk
+                self.assertLessEqual(len(response), 8192)
+            connection.close()
+        with Upstream.active_condition:
+            released = Upstream.active_condition.wait_for(lambda: not Upstream.active_uploads,
+                timeout=max(0, deadline - time.monotonic()))
+        self.assertTrue(released, self.held_uploads)
+
+    def test_five_active_connections_and_release_health_exemption(self):
+        connections = [self.hold("127.0.0.31", port=CONNECTION_PORT) for _ in range(5)]
+        self.assert_429(request(ip="127.0.0.31", port=CONNECTION_PORT))
+        self.assertEqual(request("health", ip="127.0.0.31", port=CONNECTION_PORT)[0], 200)
+        self.assert_429(request("health", ip="127.0.0.31", method="POST", port=CONNECTION_PORT))
+        self.assert_429(request("health", ip="127.0.0.31", headers={"Content-Length": "1"}, port=CONNECTION_PORT))
+        self.assertEqual(request(ip="127.0.0.32", port=CONNECTION_PORT)[0], 200)
+        self.release_uploads(connections)
+        self.assertEqual(request(ip="127.0.0.31", port=CONNECTION_PORT)[0], 200)
 
     def test_global_active_request_bound_across_clients(self):
-        connections = [self.hold(f"127.0.0.{40+index//5}") for index in range(20)]
-        self.assert_429(request(ip="127.0.0.45"))
-        self.assertEqual(request("health", ip="127.0.0.45")[0], 200)
-        for connection in connections:
-            connection.close()
+        for port in (CONNECTION_PORT, BUFFERED_CONNECTION_PORT):
+            with self.subTest(buffered=port == BUFFERED_CONNECTION_PORT):
+                self.held_uploads = []
+                connections = []
+                try:
+                    connections.extend(self.hold(f"127.0.0.{40+index//5}", port=port) for index in range(20))
+                    expected = {item["token"] for item in self.held_uploads}
+                    if port == CONNECTION_PORT:
+                        with Upstream.active_condition:
+                            self.assertEqual(Upstream.active_uploads, expected, self.held_uploads)
+                    # Also retain the original buffered-upload case. These independent
+                    # zones have no competing rate rejection, use the production body
+                    # timeout and start empty after acknowledged connection cleanup.
+                    for connection in connections:
+                        self.assertIsNone(self.pending_response(connection), self.held_uploads)
+                    with Upstream.active_condition:
+                        diagnostic = {"listener": port, "upstream_active": sorted(Upstream.active_uploads),
+                                      "held_uploads": self.held_uploads}
+                    self.assert_429(request(ip="127.0.0.45", port=port), context=diagnostic)
+                    self.assertEqual(request("health", ip="127.0.0.45", port=port)[0], 200)
+                    if port == CONNECTION_PORT:
+                        with Upstream.active_condition:
+                            self.assertEqual(Upstream.active_uploads, expected, self.held_uploads)
+                    for connection in connections:
+                        self.assertIsNone(self.pending_response(connection), self.held_uploads)
+                    self.release_uploads(connections)
+                    self.assertEqual(request(ip="127.0.0.45", port=port)[0], 200)
+                    print(f"Verified port={port}: 20 active uploads, 21st=429, health=200, released admission=200.", flush=True)
+                finally:
+                    # Keep the next subcase independent even if an assertion fails.
+                    remaining = [connection for connection in connections if connection.fileno() >= 0]
+                    if remaining:
+                        self.release_uploads(remaining)
 
     def test_global_request_rate_across_independent_clients(self):
         try:
@@ -370,4 +485,4 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["prepare"]:
         prepare(sys.argv[2])
     else:
-        unittest.main(argv=[sys.argv[0]], verbosity=2)
+        unittest.main(verbosity=2)

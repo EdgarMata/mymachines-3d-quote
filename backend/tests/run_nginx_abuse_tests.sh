@@ -7,6 +7,12 @@ runner="${name}-runner"
 cleanup() {
     status=$?
     trap - EXIT
+    if [ "$status" -ne 0 ]; then
+        # Synthetic fixture only. Retain module rejection reasons before removal;
+        # the ordinary Compose failure logger cannot see these disposable names.
+        docker exec "$name" nginx -V >&2 2>&1 || true
+        docker logs --tail 250 "$name" >&2 2>&1 || true
+    fi
     docker rm -f "$runner" "$name" >/dev/null 2>&1 || true
     rm -rf "$fixture"
     exit "$status"
@@ -43,4 +49,4 @@ done
 docker run --rm --pull never --name "$runner" --network "container:$name" \
     -v "$repo/backend/tests:/app/tests:ro" \
     -v "$repo/frontend:/source/frontend:ro" \
-    mymachines-3d-quote-backend:latest python /app/tests/nginx_abuse_integration.py
+    mymachines-3d-quote-backend:latest python /app/tests/nginx_abuse_integration.py "$@"

@@ -223,10 +223,48 @@ Final review expands the original 14 tests to 18, preserving their objectives
 and adding ambiguous/duplicate/missing/invalid address headers, equivalent IP
 representations and direct IPv6 spoofing. Normalized repeated slashes, dot
 segments, encoded slashes, queries and redirect responses consume the same pool.
-Upload tests wait for Nginx's 100 Continue after admission instead of sleeping to
-guess when headers were parsed; readiness/release use bounded polling. Rate and
-receive-timeout checks necessarily still use monotonic time and test-only short
-intervals; these are functional checks, not latency benchmarks.
+Do not treat HTTP 100 Continue as proof of admission: Nginx can send it while
+discarding a body before a final 429. MM-008A follow-up investigation reproduced
+an original-test failure after a prior burst: some supposed held uploads had
+already received rate rejections, leaving fewer than twenty active requests.
+The following request correctly returned 200. This confirms a test defect, not
+the exact cause of the historical ARM64 run, whose disposable Nginx logs were
+not retained. Its millisecond setup does not support attributing that failure to
+the two-second fixture body timeout.
+
+Active-request assertions now use independent test-only connection zones and
+listeners, derived from the same production keys/counts and 30-second body
+timeout, without competing rate credits. The streaming listener acknowledges each
+upload through the synthetic upstream after its first body byte. A condition
+barrier verifies all twenty remain active before and after the 21st-request/health
+checks. A second listener retains production request buffering and verifies the
+same twenty-active/21st-429/health-200/recovered-200 sequence, rejecting premature
+final responses or EOF on held sockets. Request half-close, server EOF and upstream
+release acknowledgement replace blind close/poll-based recovery. These observers
+do not implement a Python limiter; Nginx still performs all enforcement.
+
+Port 80 retains all real production rate/connection/buffering rules together;
+the accelerated rate/timeout listener and its assertions remain. Only the
+capacity-isolation fixtures omit rates; production configuration is unchanged.
+Assertions are strengthened, not retried until they pass. Rate and receive-timeout
+checks still use monotonic time and test-only short intervals; these are functional
+checks, not latency benchmarks. Native ARM64 confirmation remains a CI requirement.
+
+For a bounded targeted run using the same disposable runner:
+
+```sh
+backend/tests/run_nginx_abuse_tests.sh TestAbuseProtection.test_global_active_request_bound_across_clients
+```
+
+Each invocation reports failure directly; repeated investigations must retain
+every exit code, not turn a later success into a pass for an earlier failure.
+Synthetic-only access diagnostics include timestamps, peer ports, final status,
+`$limit_req_status` and `$limit_conn_status`. On failure the exit trap prints
+the Nginx version and a bounded log tail before removing the containers. Hold
+failures include tokens, ports, interim responses and admission timing so future
+CI can distinguish rejection, timeout, premature closure and missing admission.
+See Nginx's [body-discard implementation](https://github.com/nginx/nginx/blob/release-1.28.3/src/http/ngx_http_request_body.c)
+for why a 100 response can also accompany a rejected request.
 
 The runner also checks the shipped entrypoint/Alpine validator/native Nginx parser
 with valid IPv6, invalid IPv6, broad trust and directive injection. Both named
